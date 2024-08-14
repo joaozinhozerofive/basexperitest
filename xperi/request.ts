@@ -42,13 +42,14 @@ export class RequestXperi {
             if (!this.contentType?.startsWith('multipart/form-data')) {
                 throw new Error('Content-Type is not multipart/form-data');
             }
+
+            console.log('teste 1');
             const form = formidable({
                 uploadDir : "../../src/uploads"
             });
+            console.log('teste 2');
 
-            form.parse(this.$, (erro, campos, arquivos) => {
-                console.log('caiu aqui')
-            })
+            const data = await form.parse(this.$)
       });
     }
 

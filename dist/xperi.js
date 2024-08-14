@@ -53,10 +53,8 @@ export var xperiFrame;
             try {
             }
             catch (error) {
-                console.log('caiu no erro');
             }
             finally {
-                console.log('indo para próxima função.');
                 next();
             }
         }
