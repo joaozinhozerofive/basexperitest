@@ -1,7 +1,7 @@
 import http, { IncomingMessage, ServerResponse, Server }  from 'http';
 import { ResponseXperi } from './response.js';
-import { RequestXperi } from './request.js';
-import { XperiUploadedFile } from './xperiUploadFiles/xperiUploadedFiles.js';
+import { OptionsFilesProps, RequestXperi } from './request.js';
+import { GlobalsFeatures } from './globalsFeatures.js';
 
 export namespace DeclaresTypes {
     export type NextFunction       = () => void;
@@ -14,6 +14,7 @@ export type NextFunction       = DeclaresTypes.NextFunction ;
 export type ErrorHandler       = DeclaresTypes.ErrorHandler;
 export type CallbacksProps     = DeclaresTypes.CallbacksProps;
 export type CallbackErrorProps = DeclaresTypes.CallbackErrorProps;
+export type OptionsFiles       = OptionsFilesProps;
 
  export namespace xperiFrame {
 
@@ -23,6 +24,20 @@ export type CallbackErrorProps = DeclaresTypes.CallbackErrorProps;
         public useJson : boolean = false;
         private callbacks : DeclaresTypes.CallbacksProps = [];
         private cbError   : DeclaresTypes.CallbackErrorProps = async () => {}; 
+        private fieldsFile : string[] = [];
+        private optionsFiles : OptionsFiles = {};
+
+        constructor() {
+            new GlobalsFeatures();
+        }
+
+        setFieldsFile(fieldsFile : string[]) {
+            this.fieldsFile = fieldsFile; 
+        }
+
+        setOptionsFiles(optionsFiles : OptionsFiles) {
+            this.optionsFiles = optionsFiles;
+        }
 
         use(...callbacks : DeclaresTypes.CallbacksProps) {
             this.callbacks.push(...callbacks);
@@ -46,8 +61,17 @@ export type CallbackErrorProps = DeclaresTypes.CallbackErrorProps;
         private async implementMiddleware(req : IncomingMessage, res : ServerResponse) {
             const response = new ResponseXperi(res);
             const request  = new RequestXperi(req);
-
-            this.useJson && request.contentType == 'application/json' ? await request.setBodyJson() : await request.setBody(); 
+            if(request.contentType == 'application/json') {
+                await request.setBodyJson();
+            }
+            else if(request.contentType?.split(';')[0] == 'multipart/form-data') {
+                request.setFieldsFile(this.fieldsFile);
+                request.setOptionsFiles(this.optionsFiles);
+                await request.processMultipart();
+            }
+            else {
+                await request.setBody();
+            }
 
             let toNextFunction = false;
             
@@ -70,14 +94,11 @@ export type CallbackErrorProps = DeclaresTypes.CallbackErrorProps;
             this.useJson = true;
         } 
 
-        uploadedFile(field : string, options?: object) {
-            return this.middlewareUploadedFile(field, options);
+        uploadedFiles(fields : string[], options: OptionsFiles) {
+            this.setFieldsFile(fields)
+            this.setOptionsFiles(options);
         }
-
-        middlewareUploadedFile(field : string, options?: object) {
-            return (new XperiUploadedFile(field, {teste : 'teste'})).getMiddleware();
-        }
-
+        
         close() {
             this.server?.close();
         }

@@ -8,7 +8,7 @@ export class ResponseXperi{
         this.$ = res;
     }
 
-    json(data : object) {
+    json(data : object | void) {
         this.$.end(JSON.stringify(data));
          
         return this;

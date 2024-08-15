@@ -14,5 +14,8 @@
     "skipLibCheck": true,
     "moduleResolution": "node16"
   },
-  "include": ["xperi/**/*.ts"],
+  "include": [
+    "xperi/**/*.ts",
+    "xperi/global.d.ts"
+  ],
 }

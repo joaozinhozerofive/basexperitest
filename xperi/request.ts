@@ -1,22 +1,28 @@
-import { IncomingHttpHeaders, IncomingMessage } from 'http';
+import { IncomingMessage } from 'http';
 import { XperiError } from './xperiError.js';
-import Busboy from 'busboy';
-import fs from "fs";
-import formidable, {errors as formidableErrors} from 'formidable';
+import formidable, {errors as formidableErrors, Part} from 'formidable';
+import path from 'path';
+import IncomingForm from 'formidable/Formidable.js';
+import { randomBytes } from 'crypto';
+
+export type OptionsFilesProps  = formidable.Options;
 
 export class RequestXperi {
     $: IncomingMessage;
     public body: object | string | null | undefined = {};
     public contentType: string | undefined;
-    public files: { [key: string]: any } = {};
+    public files: {[key: string]: any } = {};
+    public fields : {[key : string] : any} = {}
+    public optionsFiles : formidable.Options = {};
+    private fieldsFiles : string[] = [];
 
     constructor(req: IncomingMessage) {
         this.$ = req;
         this.contentType = this.$.headers['content-type'];
     }
 
-    async setBodyJson(): Promise<void> {
-        return await new Promise((resolve, reject) => {
+    setBodyJson() {
+        return new Promise((resolve, reject) => {
             let body = '';
             this.$.on('data', chunk => {
                 body += chunk.toString();
@@ -24,8 +30,8 @@ export class RequestXperi {
 
             this.$.on('end', () => {
                 try {
-                    this.body = {}; JSON.parse(`{"body" : "teste"}`);
-                    resolve();
+                    this.body = JSON.parse(body); ;
+                    resolve(body);
                 } catch (error) {
                     reject(new XperiError('Invalid JSON')); 
                 }
@@ -34,51 +40,94 @@ export class RequestXperi {
             this.$.on('error', err => {
                 reject(err); 
             });
-        });
+        })
     }
 
-    processMultipart(): Promise<void> {
-        return new Promise<void>(async (resolve, reject) => {
-            if (!this.contentType?.startsWith('multipart/form-data')) {
-                throw new Error('Content-Type is not multipart/form-data');
-            }
-
-            console.log('teste 1');
-            const form = formidable({
-                uploadDir : "../../src/uploads"
-            });
-            console.log('teste 2');
-
-            const data = await form.parse(this.$)
-      });
+    setFieldsFile(fieldsFiles : string[]) {
+        this.fieldsFiles = fieldsFiles; 
     }
 
-    private bufferSplit(buffer: Buffer, separator: string | Buffer): Buffer[] {
-        const result: Buffer[] = [];
-        let start = 0;
-        let end;
-        
-        while ((end = buffer.indexOf(separator, start)) !== -1) {
-            result.push(buffer.slice(start, end));
-            start = end + separator.length;
+    setOptionsFiles(optionsFiles : OptionsFilesProps) {
+        this.optionsFiles = optionsFiles;
+    }
+
+    async processMultipart() {
+        if (!this.contentType?.startsWith('multipart/form-data')) {
+            throw new Error('Content-Type is not multipart/form-data');
         }
-        
-        result.push(buffer.slice(start));
-        return result;
+
+        this.formatOptionsFiles();
+        const form =  formidable(this.optionsFiles)
+
+        const [fields, files] = await form.parse(this.$)
+        this.setFieldsToBodyJson(fields);
+        this.setObjectFiles(files);
     }
 
-    private getBoundary(): string | undefined {
-        const contentType = this.contentType || '';
-        const match = /boundary=([^;]+)/.exec(contentType);
-        return match ? match[1] : undefined;
+    private formatOptionsFiles() {
+        this.optionsFiles.keepExtensions = true;
+    }
+
+    private setFieldsToBodyJson(fields :  formidable.Fields) {
+        let entriesFields = Object.entries(fields);
+        
+        let multipartFields = entriesFields.map(( [key, value] ) => {
+            value = value ?? [];
+            let newValue = value.length === 1 ? value[0] : value;
+            return {[key] : newValue};
+        })
+
+        const newFields : {[key : string] : any} = {};
+
+        for(const element of multipartFields){
+            for(const [key, value] of Object.entries(element)) {
+                newFields[key] =  value;
+            }
+        }
+
+        this.fields = newFields;
+    }
+
+    private setObjectFiles(files : formidable.Files<string>) {
+        const arrayFilesByFields = this.getArrayFilesByFields(files);
+
+        const arrayFiles = arrayFilesByFields.map(([, value]) => {
+            return value ?? [];
+        });
+
+        const persistentFiles = arrayFiles.map(objectClass => {
+            return objectClass[0];
+        })
+
+        const arrayObjectFiles = persistentFiles.map(file => {
+            return {
+                filename    : file.originalFilename,
+                newFilename : file.newFilename, 
+                path        : file.filepath, 
+                mimeType    : file.mimetype, 
+                size        : file.size
+            }
+        })
+
+        this.files = arrayObjectFiles;
+    } 
+
+    private getArrayFilesByFields(files : formidable.Files<string>) {
+        if(this.fieldsFiles.length) {
+            return Object.entries(files).filter(([key, value]) => {
+                return this.fieldsFiles.includes(key);
+            })
+        }
+
+        return Object.entries(files);
     }
 
     getContentType() {
         return this.$.headers['content-type'];
     }
 
-    async setBody() {
-        return await new Promise((resolve, reject) => {
+    setBody() {
+        return new Promise((resolve, reject) => {
             let body = '';
             this.$.on('data', chunk => {
                 body += chunk.toString();

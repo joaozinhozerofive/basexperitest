@@ -1,5 +1,8 @@
+import { randomBytes } from "crypto";
 import xperi, {RequestProps, ResponseProps } from "../xperi/xperi.ts";
-const app = xperi();
+import { Part } from "formidable";
+import IncomingForm from "formidable/Formidable";
+export const app = xperi();
 
 class AppError{
     message   : string;
@@ -19,12 +22,19 @@ app.configError(async (error : unknown, req : RequestProps, res : ResponseProps)
         })
     }
 })
+const optionsUpload = {
+    uploadDir : 'C:/Users/joaov/Desktop/Projetos - Intermediário/Nodejs/xperi/src/uploads',
+    keepExtensions : true, 
+    filename : ((name: string, ext: string, part: Part, form: IncomingForm) => {
+        const fileHash = randomBytes(16).toString('hex');
+        return `${fileHash}${name}${ext}`;
+    })
+}
 
-app.use(app.uploadedFile('file'), async (req : RequestProps, res : ResponseProps) => {
+app.uploadedFiles(['fileOne', 'fileTwo'], optionsUpload)
+app.use(async (req : RequestProps, res : ResponseProps) => {
     if(true) {
-        res.json({
-            request : req.body
-        }); 
+        res.json(req.files); 
     }
 }) 
 
