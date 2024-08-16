@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import xperi, {RequestProps, ResponseProps } from "../xperi/xperi.ts";
+import xperi, {NextFunction, RequestProps, ResponseProps } from "../xperi/xperi.ts";
 import { Part } from "formidable";
 import IncomingForm from "formidable/Formidable";
 export const app = xperi();
@@ -31,14 +31,14 @@ const optionsUpload = {
     })
 }
 
-app.uploadedFiles(['fileOne', 'fileTwo'], optionsUpload)
-app.use(async (req : RequestProps, res : ResponseProps) => {
-    if(true) {
-        res.json(req.files); 
-    }
-}) 
 
-const PORT = 9090;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-})
+app.use(app.uploadedFiles(['fileOne'], optionsUpload), async (req : RequestProps, res : ResponseProps) => {
+   res.json({
+    teste : "testando"
+   })   
+});
+const port = 9090;
+app.listen(
+    { port, 
+      callback : () => { console.log(`Server is running on port ${port}`) }
+    });

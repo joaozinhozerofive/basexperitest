@@ -1,9 +1,6 @@
 import { IncomingMessage } from 'http';
 import { XperiError } from './xperiError.js';
 import formidable, {errors as formidableErrors, Part} from 'formidable';
-import path from 'path';
-import IncomingForm from 'formidable/Formidable.js';
-import { randomBytes } from 'crypto';
 
 export type OptionsFilesProps  = formidable.Options;
 
@@ -13,8 +10,8 @@ export class RequestXperi {
     public contentType: string | undefined;
     public files: {[key: string]: any } = {};
     public fields : {[key : string] : any} = {}
-    public optionsFiles : formidable.Options = {};
-    private fieldsFiles : string[] = [];
+    public optionsFiles : OptionsFilesProps = {keepExtensions : true};
+    public fieldsFiles : string[] | void = [];
 
     constructor(req: IncomingMessage) {
         this.$ = req;
@@ -43,7 +40,7 @@ export class RequestXperi {
         })
     }
 
-    setFieldsFile(fieldsFiles : string[]) {
+    setFieldsFile(fieldsFiles? : string[]) {
         this.fieldsFiles = fieldsFiles; 
     }
 
@@ -55,18 +52,12 @@ export class RequestXperi {
         if (!this.contentType?.startsWith('multipart/form-data')) {
             throw new Error('Content-Type is not multipart/form-data');
         }
-
-        this.formatOptionsFiles();
         const form =  formidable(this.optionsFiles)
-
         const [fields, files] = await form.parse(this.$)
         this.setFieldsToBodyJson(fields);
         this.setObjectFiles(files);
     }
 
-    private formatOptionsFiles() {
-        this.optionsFiles.keepExtensions = true;
-    }
 
     private setFieldsToBodyJson(fields :  formidable.Fields) {
         let entriesFields = Object.entries(fields);
@@ -113,9 +104,9 @@ export class RequestXperi {
     } 
 
     private getArrayFilesByFields(files : formidable.Files<string>) {
-        if(this.fieldsFiles.length) {
-            return Object.entries(files).filter(([key, value]) => {
-                return this.fieldsFiles.includes(key);
+        if(this.fieldsFiles?.length) {
+            return Object.entries(files).filter(([key]) => {
+                return this.fieldsFiles?.includes(key);
             })
         }
 
