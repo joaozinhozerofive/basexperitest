@@ -2,11 +2,12 @@ import http, { IncomingMessage, ServerResponse, Server, request }  from 'http';
 import { ResponseXperi } from './response.js';
 import { OptionsFilesProps, RequestXperi } from './request.js';
 import { GlobalsFeatures } from './globalsFeatures.js';
+import { ObjectRouter, UseRouterXperi } from './xperiRouter/xperiRouter.js';
 
 export namespace DeclaresTypes {
     export type NextFunction       = () => void;
     export type ErrorHandler       = Error | undefined;
-    export type CallbacksProps     = ((req : RequestProps, res : ResponseProps, next : NextFunction, server?: XperiInstance) => Promise<any>)[];
+    export type CallbacksProps     = ((req? : RequestProps, res? : ResponseProps, next? : NextFunction, server?: XperiInstance) => Promise<any>)[] | any[];
     export type CallbackErrorProps = ((error : unknown, req : RequestProps, res : ResponseProps) => Promise<void | object>);
     export type ObjectMultipart    = {fields : string[], options : OptionsFiles};
     export type ListenProps         = { port : number,  host? : string, callback? : () => void};
@@ -25,12 +26,12 @@ export type ListenProps        = DeclaresTypes.ListenProps;
       export class Xperi {
         private server : Server  | null =  null;
         private port : number | null = null;
-        public useJson : boolean = false;
+        useJson : boolean = false;
         private callbacks : DeclaresTypes.CallbacksProps = [];
         private cbConfigError   : DeclaresTypes.CallbackErrorProps = async () => {}; 
-        public optionsFiles : OptionsFilesProps = {keepExtensions : true};
-        public fieldsFiles : string[] | undefined = [];
-        
+        optionsFiles : OptionsFilesProps = {keepExtensions : true};
+        fieldsFiles : string[] | undefined = [];
+        cbRoutes : CallbacksProps = [];
 
         constructor() {
             new GlobalsFeatures();
@@ -81,7 +82,17 @@ export type ListenProps        = DeclaresTypes.ListenProps;
         }
 
         private async executeCallback(request : RequestProps, response : ResponseProps, next : NextFunction, index : number) {
+            if(this.callbacks[index] instanceof UseRouterXperi.XperiRouter) {
+                await this.executeRoutes(request, response, next, index);
+                return;
+            }
             await this.callbacks[index](request, response, next, this);
+        }
+        
+        private async executeRoutes(request : RequestProps, response : ResponseProps, next : NextFunction, index : number) {
+            const fnCallback : ObjectRouter = this.callbacks[index];
+
+            fnCallback.executeRoutes(request, response, this); 
         }
 
         async setContentRequest(request : RequestProps) {
@@ -114,7 +125,6 @@ export type ListenProps        = DeclaresTypes.ListenProps;
             return this.middlewareUploaded.bind(objectMultipart);
         }
 
-        
         setFieldsFile(fieldsFiles? : string[]) {
             this.fieldsFiles = fieldsFiles; 
         }
@@ -132,14 +142,18 @@ export type ListenProps        = DeclaresTypes.ListenProps;
         close() {
             this.server?.close();
         }
+
+        useRoutes(...cbRoutes : CallbacksProps) {
+            this.cbRoutes = cbRoutes;
+        }
     }
 
     export const xperi =  new Xperi();
 }
 
 const xperi = () => xperiFrame.xperi; 
-export default xperi;
-
+export const Router = () => new UseRouterXperi.XperiRouter();
 export interface ResponseProps extends ResponseXperi{} 
 export interface RequestProps extends RequestXperi{}
 export interface XperiInstance extends  xperiFrame.Xperi{};
+export default xperi;
