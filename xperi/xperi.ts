@@ -3,6 +3,7 @@ import { ResponseXperi } from './response.js';
 import { OptionsFilesProps, RequestXperi } from './request.js';
 import { GlobalsFeatures } from './globalsFeatures.js';
 import { ObjectRouter, UseRouterXperi } from './xperiRouter/xperiRouter.js';
+import url from "url";
 
 export namespace DeclaresTypes {
     export type NextFunction       = () => void;
@@ -28,7 +29,7 @@ export type ListenProps        = DeclaresTypes.ListenProps;
         private port : number | null = null;
         useJson : boolean = false;
         private callbacks : DeclaresTypes.CallbacksProps = [];
-        private cbConfigError   : DeclaresTypes.CallbackErrorProps = async () => {}; 
+        cbConfigError   : DeclaresTypes.CallbackErrorProps = async () => {}; 
         optionsFiles : OptionsFilesProps = {keepExtensions : true};
         fieldsFiles : string[] | undefined = [];
         cbRoutes : CallbacksProps = [];
@@ -59,34 +60,45 @@ export type ListenProps        = DeclaresTypes.ListenProps;
         }
 
         private async implementMiddleware(req : RequestProps, res : ResponseProps) {
-            await this.setContentRequest(req);
+            try {
+                await this.setContentRequest(req);
+                const parsedUrl = url.parse(req.url, true)
+                req.setQueryParams(parsedUrl.query);
+                let nextFunction = false;
+                const next = () => {
+                    nextFunction = true;
+                };
 
-            let nextFunction = false;
-            const next = () => {
-                nextFunction = true;
-            };
-
-            for(let i = 0; i < this.callbacks?.length; i++) {
-                if(nextFunction || i === 0) {
-                    try {
-                        nextFunction = false;
-                        await this.executeCallback(req, res, next, i);
-                    }catch (error) {
-                        await this.cbConfigError(error, req, res);
+                for(let i = 0; i < this.callbacks?.length; i++) {
+                    if(nextFunction || i === 0) {
+                        try {
+                            nextFunction = false;
+                            await this.executeCallback(req, res, next, i);
+                        }catch (error) {
+                            await this.cbConfigError(error, req, res);
+                            break;
+                        }
+                    } 
+                    else {
+                        break;
                     }
-                } 
-                else {
-                    break;
                 }
+            } catch(error) {
+                await this.cbConfigError(error, req, res);
             }
         }
 
         private async executeCallback(request : RequestProps, response : ResponseProps, next : NextFunction, index : number) {
-            if(this.callbacks[index] instanceof UseRouterXperi.XperiRouter) {
-                await this.executeRoutes(request, response, next, index);
-                return;
+            try {
+                if (this.callbacks[index] instanceof UseRouterXperi.XperiRouter) {
+                    await this.executeRoutes(request, response, next, index);
+                    next();
+                    return;
+                }
+                await this.callbacks[index](request, response, next, this);
+            } catch (error) {
+                await this.cbConfigError(error, request, response);
             }
-            await this.callbacks[index](request, response, next, this);
         }
         
         private async executeRoutes(request : RequestProps, response : ResponseProps, next : NextFunction, index : number) {
@@ -152,7 +164,7 @@ export type ListenProps        = DeclaresTypes.ListenProps;
 }
 
 const xperi = () => xperiFrame.xperi; 
-export const Router = () => new UseRouterXperi.XperiRouter();
+export const Router = () => new UseRouterXperi.XperiRouter;
 export interface ResponseProps extends ResponseXperi{} 
 export interface RequestProps extends RequestXperi{}
 export interface XperiInstance extends  xperiFrame.Xperi{};

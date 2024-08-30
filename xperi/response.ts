@@ -1,5 +1,7 @@
 import { OutgoingHttpHeader, ServerResponse } from "http";
 import { OutgoingHttpHeaders } from "http2";
+import url from "url";
+
 
 export class ResponseXperi{
     $ : ServerResponse;
@@ -9,8 +11,8 @@ export class ResponseXperi{
     }
 
     json(data : object | void) {
+        this.contentType('application/json');
         this.$.end(JSON.stringify(data));
-         
         return this;
     }
     
@@ -26,7 +28,6 @@ export class ResponseXperi{
 
     status(code : number) {
         this.$.statusCode = code;
-        
         return this;
     }
 
@@ -42,7 +43,6 @@ export class ResponseXperi{
     }
 
     writeHead(statusCode : number, headers?: OutgoingHttpHeaders | OutgoingHttpHeader[]) {
-        this.$.writeHead(303, { Connection: 'close', Location: '/' });
+        this.$.writeHead(statusCode, headers);
     }
-
 }
