@@ -40,20 +40,12 @@ newRoutes.get("/horaDoFraut", async (req : RequestProps, res : ResponseProps) =>
     throw new AppError('caiu no get', 404)
 })
 
-newRoutes.delete("/horaDoFraut", async (req : RequestProps, res : ResponseProps, next : NextFunction, server) => {
-    try {
-        return new Promise(async (resolve, reject) => {
-            throw new AppError('caiu no delete', 404)
-        })
-    }
-    catch(error) {
-        server?.cbConfigError(error, req, res);
-    }
-
+newRoutes.delete("/horaDoFraut/:id/teste/:user_id", async (req : RequestProps, res : ResponseProps, next : NextFunction, server) => {
+  console.log(req.params)
 })
 
 const routes = Router();
-routes.use('/teste/piazada', app.uploadedFiles(['fileOne', 'fileTwo'], {uploadDir : "../xperi/src/uploads", keepExtensions : true}), newRoutes);
+routes.use('/teste/:teste', newRoutes);
 
 app.use(routes);
 

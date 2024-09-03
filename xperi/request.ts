@@ -31,6 +31,10 @@ export interface Headers extends IncomingHttpHeaders{
     'last-modified'?: string; 
 }
 
+export interface urlParams {
+    [key : string] : string
+}
+
 export class RequestXperi {
     $: IncomingMessage;
     body: object | string | null | undefined = {};
@@ -45,6 +49,7 @@ export class RequestXperi {
         authorization : " "
     };
     query : {params? : ParsedUrlQuery } = {};
+    params : urlParams = {};
 
     constructor(req: IncomingMessage) {
         this.$ = req;

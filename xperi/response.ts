@@ -1,7 +1,5 @@
 import { OutgoingHttpHeader, ServerResponse } from "http";
 import { OutgoingHttpHeaders } from "http2";
-import url from "url";
-
 
 export class ResponseXperi{
     $ : ServerResponse;
