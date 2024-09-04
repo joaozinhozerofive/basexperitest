@@ -1,5 +1,5 @@
 import { IncomingHttpHeaders, IncomingMessage } from 'http';
-import { XperiError } from './xperiError.js';
+import { XperiError } from '../xperiError.js';
 import formidable, {errors as formidableErrors, Part} from 'formidable';
 import { ParsedUrlQuery } from 'querystring';
 
@@ -32,7 +32,7 @@ export interface Headers extends IncomingHttpHeaders{
 }
 
 export interface urlParams {
-    [key : string] : string
+    [key : string] : string | number;
 }
 
 export class RequestXperi {
@@ -71,6 +71,12 @@ export class RequestXperi {
 
     setQueryParams(object : ParsedUrlQuery) {
         this.query.params = {...object};
+    }
+
+    setUrlParams(params : urlParams) {
+        Object.entries(params).forEach(([key, value]) => {
+            this.params[key] = Number(value) || String(value);
+        })
     }
 
     setBodyJson() {

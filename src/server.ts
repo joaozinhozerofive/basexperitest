@@ -1,5 +1,6 @@
 import xperi, { NextFunction, RequestProps, ResponseProps, Router } from "../xperi/xperi.ts";
 export const app = xperi();
+import {cors} from "../xperi/cors/xperiCors.ts";
 
 class AppError{
     message   : string;
@@ -42,12 +43,15 @@ newRoutes.get("/horaDoFraut", async (req : RequestProps, res : ResponseProps) =>
 
 newRoutes.delete("/horaDoFraut/:id/teste/:user_id", async (req : RequestProps, res : ResponseProps, next : NextFunction, server) => {
   console.log(req.params)
+  res.json({
+    teste : "caiu no delete"
+  })
 })
 
 const routes = Router();
-routes.use('/teste/:teste', newRoutes);
+routes.use('/teste/:teste', (t, a, next) => {next && next()}, newRoutes);
 
-app.use(routes);
+app.use(cors({exposeHeaders : ""}), routes);
 
 const port = 9090;
 app.listen({ 

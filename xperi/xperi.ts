@@ -1,26 +1,11 @@
 import http, { IncomingMessage, ServerResponse, Server, request }  from 'http';
-import { ResponseXperi } from './response.js';
-import { OptionsFilesProps, RequestXperi } from './request.js';
+import { ResponseXperi } from './response/response.js';
+import { OptionsFilesProps, RequestXperi } from './request/request.js';
 import { GlobalsFeatures } from './globalsFeatures.js';
-import { ObjectRouter, UseRouterXperi } from './xperiRouter/xperiRouter.js';
+import { ObjectRouter, XperiRouter } from './xperiRouter/xperiRouter.js';
 import url from "url";
+import { Cors } from './cors/xperiCors.js';
 
-export namespace DeclaresTypes {
-    export type NextFunction       = () => void;
-    export type ErrorHandler       = Error | undefined;
-    export type CallbacksProps     = ((req? : RequestProps, res? : ResponseProps, next? : NextFunction, server?: XperiInstance) => Promise<any>)[] | any[];
-    export type CallbackErrorProps = ((error : unknown, req : RequestProps, res : ResponseProps) => Promise<void | object>);
-    export type ObjectMultipart    = {fields : string[], options : OptionsFiles};
-    export type ListenProps         = { port : number,  host? : string, callback? : () => void};
-}
-
-export type NextFunction       = DeclaresTypes.NextFunction ;
-export type ErrorHandler       = DeclaresTypes.ErrorHandler;
-export type CallbacksProps     = DeclaresTypes.CallbacksProps;
-export type CallbackErrorProps = DeclaresTypes.CallbackErrorProps;
-export type OptionsFiles       = OptionsFilesProps;
-export type ObjectMultipart    = DeclaresTypes.ObjectMultipart;
-export type ListenProps        = DeclaresTypes.ListenProps;
 
  export namespace xperiFrame {
 
@@ -49,7 +34,7 @@ export type ListenProps        = DeclaresTypes.ListenProps;
         listen({port, host = undefined,  callback} : ListenProps) {
             this.server = http.createServer(async (req : IncomingMessage, res : ServerResponse) => {
                 const response = new ResponseXperi(res);
-                const request  = new RequestXperi(req);  
+                const request  = new RequestXperi(req);
                 this.implementMiddleware(request, response);
             });
 
@@ -64,25 +49,20 @@ export type ListenProps        = DeclaresTypes.ListenProps;
                 await this.setContentRequest(req);
                 const parsedUrl = url.parse(req.url, true)
                 req.setQueryParams(parsedUrl.query);
-                let nextFunction = false;
-                const next = () => {
-                    nextFunction = true;
-                };
+                
+                let index = 0;
 
-                for(let i = 0; i < this.callbacks?.length; i++) {
-                    if(nextFunction || i === 0) {
+                const next = async () => {
+                   if(index < this.callbacks.length) {
                         try {
-                            nextFunction = false;
-                            await this.executeCallback(req, res, next, i);
+                            await this.executeCallback(req, res, next, index++);
                         }catch (error) {
                             await this.cbConfigError(error, req, res);
-                            break;
                         }
-                    } 
-                    else {
-                        break;
-                    }
-                }
+                   }
+                };
+
+                next();
             } catch(error) {
                 await this.cbConfigError(error, req, res);
             }
@@ -90,11 +70,12 @@ export type ListenProps        = DeclaresTypes.ListenProps;
 
         private async executeCallback(request : RequestProps, response : ResponseProps, next : NextFunction, index : number) {
             try {
-                if (this.callbacks[index] instanceof UseRouterXperi.XperiRouter) {
+                if (this.callbacks[index] instanceof XperiRouter) {
                     await this.executeRoutes(request, response, next, index);
                     next();
                     return;
                 }
+
                 await this.callbacks[index](request, response, next, this);
             } catch (error) {
                 await this.cbConfigError(error, request, response);
@@ -160,12 +141,31 @@ export type ListenProps        = DeclaresTypes.ListenProps;
         }
     }
 
-    export const xperi =  new Xperi();
+    export const xperi  = new Xperi();
+    export const Router = new XperiRouter
 }
 
 const xperi = () => xperiFrame.xperi; 
-export const Router = () => new UseRouterXperi.XperiRouter;
+export const Router = () => xperiFrame.Router;
+export default xperi;
+
 export interface ResponseProps extends ResponseXperi{} 
 export interface RequestProps extends RequestXperi{}
 export interface XperiInstance extends  xperiFrame.Xperi{};
-export default xperi;
+
+export type NextFunction       = DeclaresTypes.NextFunction ;
+export type ErrorHandler       = DeclaresTypes.ErrorHandler;
+export type CallbacksProps     = DeclaresTypes.CallbacksProps;
+export type CallbackErrorProps = DeclaresTypes.CallbackErrorProps;
+export type OptionsFiles       = OptionsFilesProps;
+export type ObjectMultipart    = DeclaresTypes.ObjectMultipart;
+export type ListenProps        = DeclaresTypes.ListenProps;
+
+export namespace DeclaresTypes {
+    export type NextFunction       = () => void;
+    export type ErrorHandler       = Error | undefined;
+    export type CallbacksProps     = ((req? : RequestProps, res? : ResponseProps, next? : NextFunction, server?: XperiInstance) => Promise<any>)[] | any[];
+    export type CallbackErrorProps = ((error : unknown, req : RequestProps, res : ResponseProps) => Promise<void | object>);
+    export type ObjectMultipart    = {fields : string[], options : OptionsFiles};
+    export type ListenProps         = { port : number,  host? : string, callback? : () => void};
+}
