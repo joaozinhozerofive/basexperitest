@@ -75,7 +75,6 @@ import { Cors } from './cors/xperiCors.js';
                     next();
                     return;
                 }
-
                 await this.callbacks[index](request, response, next, this);
             } catch (error) {
                 await this.cbConfigError(error, request, response);
@@ -106,7 +105,7 @@ import { Cors } from './cors/xperiCors.js';
             await request.processMultipart();
         }
         
-        uploadedFiles(fields : string[], options: OptionsFiles) {
+        uploadedFiles(options: OptionsFiles, ...fields : string[]) {
             const objectMultipart = {
                 fields, 
                 options
@@ -139,14 +138,18 @@ import { Cors } from './cors/xperiCors.js';
         useRoutes(...cbRoutes : CallbacksProps) {
             this.cbRoutes = cbRoutes;
         }
+
+        readFile() {
+
+        }
     }
 
     export const xperi  = new Xperi();
-    export const Router = new XperiRouter
+    export const Router = XperiRouter
 }
 
 const xperi = () => xperiFrame.xperi; 
-export const Router = () => xperiFrame.Router;
+export const Router = () => new xperiFrame.Router;
 export default xperi;
 
 export interface ResponseProps extends ResponseXperi{} 

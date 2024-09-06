@@ -1,6 +1,7 @@
-import xperi, { NextFunction, RequestProps, ResponseProps, Router } from "../xperi/xperi.ts";
+import xperi, { NextFunction, OptionsFiles, RequestProps, ResponseProps, Router } from "../xperi/xperi.ts";
 export const app = xperi();
 import {cors} from "../xperi/cors/xperiCors.ts";
+import path from "path";
 
 class AppError{
     message   : string;
@@ -27,14 +28,13 @@ app.configError(async (error : unknown, req : RequestProps, res: ResponseProps) 
 
 const newRoutes = Router();
 
-newRoutes.post("/horaDoFraut", (req : RequestProps, res, next) => {
-    const [, token] = req.headers.authorization.split(" ")[1];
+const options : OptionsFiles = {
+    uploadDir      : `C:/Users/joaov/Desktop/Projetos - Intermediário/Nodejs/xperi/src/uploads`,
+    keepExtensions : true
+};
 
-    if(token) {
-        next && next();
-    }
-}, async (req : RequestProps, res : ResponseProps) => {
-    throw new AppError('caiu no post', 404)
+newRoutes.post("/horaDoFraut/:user_id", app.uploadedFiles(options, 'fileOne', 'fileTwo'), async (req : RequestProps, res : ResponseProps) => {
+    res.json(req.files)
 })
 
 newRoutes.get("/horaDoFraut", async (req : RequestProps, res : ResponseProps) => {
@@ -42,16 +42,19 @@ newRoutes.get("/horaDoFraut", async (req : RequestProps, res : ResponseProps) =>
 })
 
 newRoutes.delete("/horaDoFraut/:id/teste/:user_id", async (req : RequestProps, res : ResponseProps, next : NextFunction, server) => {
-  console.log(req.params)
   res.json({
     teste : "caiu no delete"
   })
 })
 
 const routes = Router();
-routes.use('/teste/:teste', (t, a, next) => {next && next()}, newRoutes);
 
-app.use(cors({exposeHeaders : ""}), routes);
+routes.use('/mouse/:mouse', () => {
+});
+
+routes.use('/teste/:teste', cors({exposeHeaders : ""}),  newRoutes);
+
+app.use(routes);
 
 const port = 9090;
 app.listen({ 

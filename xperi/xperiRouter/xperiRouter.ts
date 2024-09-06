@@ -4,23 +4,28 @@ import { buildRoute } from "./build-route.js";
 interface Routes{
     path :  string,
     originalPath :  string,
-    callbacks : CallbacksProps, 
     method?: string     
+    alternativeRoutes?: Routes[]
+    callbacks? : CallbacksProps;
 }
 
 export class XperiRouter{
-    routes : Routes[] = [];
-    mainRoute : string = '';
-    res    : ResponseProps | null = null;
-    req    : RequestProps  | null = null;
-    server : XperiInstance | null = null;
-    prevRoute : string = '';
+    private routes : Routes[] = [];
+    private mainRoute : string = '';
+    private res    : ResponseProps | null = null;
+    private req    : RequestProps  | null = null;
+    private server : XperiInstance | null = null;
+    private prevRoute : string = '';
 
     use(path: string, ...callbacks : CallbacksProps) {
+        const callbacksInstanceofRouter  = callbacks.filter(cb => cb instanceof XperiRouter);
+        const alternativeRoutes = callbacksInstanceofRouter.map(cb => cb.routes);
+
         this.routes.push({ 
             path : buildRoute(path),
             originalPath : path,
-            callbacks 
+            alternativeRoutes : alternativeRoutes[0],
+            callbacks
         });
     }
 
@@ -28,17 +33,13 @@ export class XperiRouter{
         this.setRequest(req);
         this.setResponse(res);
         this.setServer(server);
-        const routes = this.routes.map(newRoute => {
-            return this.getRouteWithCallbacks(newRoute.path, newRoute, prevRoute)
-        });
-        const routeMatched = routes.find(newRoute => {
-            return this.isValidRouteByPrevRouteAndNewRoute(newRoute as Routes, prevRoute as string);
-        });
-        
-        if(routeMatched) {
-            this.setRequestParamsRegex(routeMatched);
-            this.setMainRoute(routeMatched.path);
-            this.implementMiddleware(routeMatched.callbacks);
+
+        const routeMatched = this.routes.find(route => this.isValidRouteByPrevRouteAndNewRoute(route));
+
+        if(routeMatched && routeMatched.callbacks) {
+            this.setRequestParamsRegex(routeMatched as Routes);
+            this.setMainRoute(routeMatched.path as string);
+            this.implementMiddleware(routeMatched.callbacks, routeMatched);
         } else {
             res.status(404);
             res.$.end(`Route '${this.req?.url}' and method '${this.req?.method}' not found`);
@@ -53,93 +54,37 @@ export class XperiRouter{
         this.req?.setUrlParams(urlParams);
     }
 
-    private isValidRouteByPrevRouteAndNewRoute(newRoute : Routes, prevRoute : string) {
-        let urlRoute  = this.getArrayWithoutSpace(this.req?.$.url?.split('/') || []).join("/");
-        let thisRoute = this.getArrayWithoutSpace(newRoute?.path.split("/")  || []).join("/");
-        const thisRouteRegex = new RegExp(thisRoute);
-        let alternativeRoute = urlRoute.replace(thisRouteRegex, "");
-        const fullRouteRegex = new RegExp(`${newRoute?.path}${alternativeRoute}`);
-        const fullExternalRoute = new RegExp(`${prevRoute}/${thisRoute}`);
-        return (alternativeRoute ? fullRouteRegex.test(`/${urlRoute}`): true) || (fullExternalRoute.test(`/${urlRoute}`) && newRoute?.method === this.req?.method);
-    }
-
-    private getDefaultObjectRoute(route : string) {
-        let urlRoute         = this.getArrayWithoutSpace(this.req?.$.url?.split('/') || []).join("/");
-        let thisRoute        = this.getArrayWithoutSpace(route.split("/")).join("/");
-        const routeRegex     = new RegExp(thisRoute);
-        let alternativeRoute = urlRoute.replace(routeRegex, ""); 
-        return {
-            urlRoute, 
-            thisRoute, 
-            alternativeRoute
+     /** Função nova burro */
+    
+     private isValidRouteByPrevRouteAndNewRoute(route? : Routes) {
+        if(!route) {
+            return;
         }
-    }
 
-    private getAlternativeRouteFiltered(objectRouter : Routes, alternativeRoute : string) {
-        return objectRouter.callbacks
-        .map(cb => this.getMatchRoutesByCallbackObjectRouter(cb, alternativeRoute))
-        .find(element => element);
-    }
+        const { path : routePath }  = route;
+        const { alternativeRoutes } = route;
 
-    private getRouteWithCallbacks(route : string, objectRouter : Routes, prevRoute? : string){
-        const { urlRoute, thisRoute, alternativeRoute } = this.getDefaultObjectRoute(route);
-        const alternativeRouteFiltered = this.getAlternativeRouteFiltered(objectRouter, alternativeRoute);
-        return this.getObjectRouterByTypeRoute(alternativeRouteFiltered, prevRoute as string, urlRoute, thisRoute, objectRouter)
-    }
+        const newAlternativeRoutes = alternativeRoutes && alternativeRoutes.filter(alternativeRoute => {
+            return alternativeRoute?.path;
+        })
 
-    private getObjectRouterByTypeRoute(alternativeRouteFiltered : Routes, prevRoute : string, urlRoute : string, thisRoute : string, objectRouter : Routes) {
-        const newAlternativeRoute = alternativeRouteFiltered?.path;
-        const externalRoute       = prevRoute ? `${prevRoute}/${thisRoute}` : ""
-        const urlRouteFormatted   = urlRoute;
-        
-        if(externalRoute) {
-            const isValidRoute = 
-            this.getOrConditionals(`/${urlRouteFormatted}` == externalRoute, `${urlRouteFormatted}/` == externalRoute, `/${urlRouteFormatted}/` == externalRoute, `${urlRouteFormatted}` == externalRoute); 
-            const newObjectRouter = this.routes.find(newRoute => {
-                const newRouteMethod  = newRoute?.method
-                const prevAndNewRoute = `${prevRoute}${newRoute.path}`
-                const requestMethod   = this.req?.method
-                return prevAndNewRoute === `/${urlRouteFormatted}` && (newRouteMethod ? (newRouteMethod === requestMethod) : true)
-            })
-            if(isValidRoute) {
-                return newObjectRouter
-            }
+        if(!newAlternativeRoutes?.length ) {
+            const pathRegex = new RegExp(`^${routePath}$`);
+            return pathRegex.test(this.req?.url as string);
         }
-        const routeRegex     = new RegExp(`${thisRoute}${newAlternativeRoute ?? ""}`);
-        const matchedRoutes  = routeRegex.test(urlRoute)
-        const matchedMethods = alternativeRouteFiltered?.method ? (alternativeRouteFiltered?.method === this.req?.method) : true;
-        
-        if(matchedRoutes && matchedMethods) {
-            return objectRouter;  
-        }
-    }
 
-    private getOrConditionals(...conditionals : boolean[]) {
-        let someConditionalIsTrue : boolean = false;
-        for(const conditional of conditionals) {
-            if(conditional === true) {
-                someConditionalIsTrue = conditional;
-                break;
-            }
-        }
-        return someConditionalIsTrue;
-    }
+        const alternativeRouteCompatibleWithUrlRoute = newAlternativeRoutes.find(alternativeRoute => {
+            const fullPathRegex = new RegExp(`^${routePath}${alternativeRoute.path}$`);
+            return fullPathRegex.test(this.req?.url as string) && this.req?.method === alternativeRoute?.method
+        })
 
-    private getMatchRoutesByCallbackObjectRouter(cb : any, alternativeRoute : string) {
-        return cb.routes?.find((newRoute : Routes) => {
-            return newRoute.path === alternativeRoute && (newRoute.method ? (this.req?.method === newRoute.method) : true)
-        });
-    }
+        if(alternativeRouteCompatibleWithUrlRoute) {
+            this.setRequestParamsRegex(alternativeRouteCompatibleWithUrlRoute)
 
-    private getArrayWithoutSpace(array : string[]) {
-        let newArray = [];
-        for(const element of array) {
-            if(element) {
-                const [elementFormatted] = element.split("?");
-                newArray.push(elementFormatted);
-            }
+            return true;
         }
-        return newArray;
+
+        return false;
     }
 
     private setResponse(res : ResponseProps) {
@@ -158,12 +103,12 @@ export class XperiRouter{
         this.mainRoute = route;
     }
 
-    private async implementMiddleware(callbacks: CallbacksProps) {
+    private async implementMiddleware(callbacks: CallbacksProps, route :Routes) {
         let index = 0;
         const next = async () => {
             if(index < callbacks.length) {
                 try {
-                    await this.executeCallback(callbacks, index++, next);
+                    await this.executeCallback(callbacks, index++, next, route);
                 }catch (error) {
                     await this.server?.cbConfigError(error, this.req as RequestProps, this.res as ResponseProps)
                 }
@@ -173,10 +118,10 @@ export class XperiRouter{
         next();
     }
 
-    private async executeCallback(callbacks : CallbacksProps, index : number, next : NextFunction) {
+    private async executeCallback(callbacks : CallbacksProps, index : number, next : NextFunction, route : Routes) {
         try {
             if(callbacks[index] instanceof XperiRouter) {
-                this.executeExternalInstanceRouter(callbacks, index);
+                this.executeExternalInstanceRouter(callbacks[index], index, route);
                 return;
             }
 
@@ -186,11 +131,17 @@ export class XperiRouter{
         }
     }
 
-    async executeExternalInstanceRouter(callbacks : CallbacksProps, index : number) {
+    async executeExternalInstanceRouter(xperiRouter : XperiRouter, index : number, route : Routes) {
         try {
-            const fnCallback : ObjectRouter = callbacks[index];
-            const newCallback = fnCallback.executeExternalCallbackInstanceRouter.bind(fnCallback);
-            newCallback(this.req as RequestProps, this.res as ResponseProps, this.server as XperiInstance, this.mainRoute);
+            const alternativeRouteMatched = route?.alternativeRoutes?.find(alternativeRoute => {
+                const fullPathRegex = new RegExp(`^${route.path}${alternativeRoute.path}$`);
+                return fullPathRegex.test(this.req?.url as string) && this.req?.method === alternativeRoute?.method
+            })
+
+            if(alternativeRouteMatched?.callbacks) {
+                this.implementMiddleware(alternativeRouteMatched.callbacks, alternativeRouteMatched);
+            }
+
         } catch(error) {
             await this.server?.cbConfigError(error, this.req as RequestProps, this.res as ResponseProps);
         }
@@ -242,7 +193,8 @@ export class XperiRouter{
             path : buildRoute(path),
             originalPath : path, 
             callbacks, 
-            method: 'DELETE' });
+            method: 'DELETE' 
+        });
     }
 }
 

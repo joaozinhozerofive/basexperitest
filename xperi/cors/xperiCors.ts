@@ -1,5 +1,9 @@
 import { NextFunction, RequestProps, ResponseProps } from "../xperi.js";
 
+/**
+ * @interface CorsProps
+ * Props of xperi cors
+ */
 export interface CorsProps {
     origins?: string[] | string;
     methods?: string[] | string;
@@ -8,7 +12,6 @@ export interface CorsProps {
     maxAge?: number;
     exposeHeaders?: string[] | string;
 }
-
 export class Cors {
     private origins?: string[];
     private methods?: string[];
@@ -33,6 +36,10 @@ export class Cors {
         this.setExposeHeaders(exposeHeaders);
     }
 
+    /**
+     * Change value of cors origins
+     * @param {string[] | string} origins 
+     */
     setOrigins(origins?: string[] | string) {
         const { origins: originsDefault } = this.getObjectCorsDefault();
         this.origins = origins
@@ -40,6 +47,10 @@ export class Cors {
             : originsDefault;
     }
 
+    /**
+     * Change allowed methods
+     * @param {string[] | string} methods 
+     */
     setMethods(methods?: string[] | string) {
         const { methods: methodsDefault } = this.getObjectCorsDefault();
         this.methods = methods
@@ -47,6 +58,10 @@ export class Cors {
             : methodsDefault;
     }
 
+    /**
+     * Change allowed headers
+     * @param {string[] | string} headers 
+     */
     setHeaders(headers?: string[] | string) {
         const { headers: headersDefault } = this.getObjectCorsDefault();
         this.headers = headers
@@ -54,16 +69,28 @@ export class Cors {
             : headersDefault;
     }
 
+    /**
+     * Inform the credentials permission
+     * @param {boolean | undefined} allowedCredentials 
+     */
     setCredentials(allowedCredentials?: boolean) {
         const { allowCredentials: credentialsDefault } = this.getObjectCorsDefault();
         this.allowCredentials = allowedCredentials ?? credentialsDefault;
     }
 
+    /**
+     * Change the max-age value of preflight
+     * @param {number | undefined} maxAge 
+     */
     setMaxAge(maxAge?: number) {
         const { maxAge: maxAgeDefault } = this.getObjectCorsDefault();
         this.maxAge = maxAge ?? maxAgeDefault;
     }
 
+    /**
+     * Change the headers that can be exposed.
+     * @param {string[] | string} exposeHeaders 
+     */
     setExposeHeaders(exposeHeaders?: string[] | string) {
         const { exposeHeaders: exposeHeadersDefault } = this.getObjectCorsDefault();
         this.exposeHeaders = exposeHeaders
@@ -71,6 +98,10 @@ export class Cors {
             : exposeHeadersDefault;
     }
 
+    /**
+     * Return an object containing the default CORS settings.
+     * @returns {CorsProps}
+     */
     private getObjectCorsDefault() {
         return {
             origins: ["*"], 
@@ -82,6 +113,13 @@ export class Cors {
         };
     }
 
+    /**
+     * Main CORS middleware -- applies all headers.
+     * @param {RequestProps} req 
+     * @param {ResponseProps} res 
+     * @param {NextFunction} next 
+     */
+    
     apply(req: RequestProps, res: ResponseProps, next: NextFunction) {
         const origin = req.headers.origin as string || '';
         if(!origin && this.origins && this.origins[0] != "*") {
@@ -113,7 +151,11 @@ export class Cors {
         next();
     }
 }
-
+/**
+ * "Export the cors variable with the main middleware.
+ * @param options 
+ * @returns 
+ */
 export const cors = (options: CorsProps) => {
     const corsInstance = new Cors(options);
     return corsInstance.apply.bind(corsInstance);

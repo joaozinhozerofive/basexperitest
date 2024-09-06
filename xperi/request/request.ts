@@ -2,9 +2,16 @@ import { IncomingHttpHeaders, IncomingMessage } from 'http';
 import { XperiError } from '../xperiError.js';
 import formidable, {errors as formidableErrors, Part} from 'formidable';
 import { ParsedUrlQuery } from 'querystring';
-
+/**
+ * Interface created to obtain the default headers from Node.js.
+ * @interface OptionsFilesProps 
+ */
 export type OptionsFilesProps  = formidable.Options;
 
+/**
+ * Interface created to obtain the default headers from Node.js.
+ * @interface OptionsFilesProps 
+ */
 export interface Headers extends IncomingHttpHeaders{
     host? : string,
     contentType? : string, 
@@ -198,6 +205,10 @@ export class RequestXperi {
                 reject(err); 
             });
         });
+    }
+
+    on(event : string, listener : () => void) {
+        this.$.on(event, listener);
     }
 
     pipe(destination: NodeJS.WritableStream, options?: { end?: boolean | undefined } | undefined): NodeJS.WritableStream {
