@@ -100,7 +100,7 @@ import { Cors } from './cors/xperiCors.js';
         }
 
         private async setConfigUploads(request : RequestProps) {
-            request.setFieldsFile(this.fieldsFiles);
+            request.setFilesFields(this.fieldsFiles);
             request.setOptionsFiles(this.optionsFiles);
             await request.processMultipart();
         }
@@ -111,13 +111,13 @@ import { Cors } from './cors/xperiCors.js';
                 options
             }
 
-            this.setFieldsFile(fields);
+            this.setFilesFields(fields);
             this.setOptionsFiles(options);
 
             return this.middlewareUploaded.bind(objectMultipart);
         }
 
-        setFieldsFile(fieldsFiles? : string[]) {
+        setFilesFields(fieldsFiles? : string[]) {
             this.fieldsFiles = fieldsFiles; 
         }
 
@@ -126,7 +126,7 @@ import { Cors } from './cors/xperiCors.js';
         }
 
         async middlewareUploaded(this : ObjectMultipart, req : RequestProps, res : ResponseProps, next : NextFunction) {
-            req.setFieldsFile(this.fields);
+            req.setFilesFields(this.fields);
             req.setOptionsFiles(this.options);
             next();
         }

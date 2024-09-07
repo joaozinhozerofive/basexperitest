@@ -3,14 +3,15 @@ import { XperiError } from '../xperiError.js';
 import formidable, {errors as formidableErrors, Part} from 'formidable';
 import { ParsedUrlQuery } from 'querystring';
 /**
- * Interface created to obtain the default headers from Node.js.
+ * Interface created to obtain the default options from formidable
+ * * See in.
  * @interface OptionsFilesProps 
  */
 export type OptionsFilesProps  = formidable.Options;
 
 /**
  * Interface created to obtain the default headers from Node.js.
- * @interface OptionsFilesProps 
+ * @interface Headers 
  */
 export interface Headers extends IncomingHttpHeaders{
     host? : string,
@@ -38,10 +39,17 @@ export interface Headers extends IncomingHttpHeaders{
     'last-modified'?: string; 
 }
 
+/**
+ * @interface urlParams
+ */
 export interface urlParams {
     [key : string] : string | number;
 }
 
+/**
+ * This class is used to manipulate and store the request data.
+ * @class
+ */
 export class RequestXperi {
     $: IncomingMessage;
     body: object | string | null | undefined = {};
@@ -66,6 +74,9 @@ export class RequestXperi {
         this.setHeader();
     }
 
+    /**
+     * Modifies the request headers.
+     */
     private setHeader() {
         this.headers = {
             ...this.$.headers, 
@@ -76,17 +87,29 @@ export class RequestXperi {
         }
     }
 
+    /**
+     * Modifies the query params;
+     * @param {ParsedUrlQuery} object 
+     */
     setQueryParams(object : ParsedUrlQuery) {
         this.query.params = {...object};
     }
 
+    /**
+     * Modifies the request params
+     * @param {urlParams} params 
+     */
     setUrlParams(params : urlParams) {
         Object.entries(params).forEach(([key, value]) => {
             this.params[key] = Number(value) || String(value);
         })
     }
 
-    setBodyJson() {
+    /**
+     * Saves the request body data as a JSON object readable by JavaScript.
+     * @returns {Promise<unknown>}
+     */
+    setBodyJson() : Promise<unknown> {
         return new Promise((resolve, reject) => {
             let body = '';
             this.$.on('data', chunk => {
@@ -108,26 +131,41 @@ export class RequestXperi {
         })
     }
 
-    setFieldsFile(fieldsFiles? : string[]) {
+    /**
+     * Saves the file fields sent in a Multipart/form-data.
+     * @param {string[] | undefined} fieldsFiles 
+     */
+    setFilesFields(fieldsFiles? : string[]) {
         this.fieldsFiles = fieldsFiles; 
     }
 
+    /**
+     * Modifies the file saving options of the formidable library.
+     * @param {OptionsFilesProps} optionsFiles 
+     */
     setOptionsFiles(optionsFiles : OptionsFilesProps) {
         this.optionsFiles = optionsFiles;
     }
 
+    /**
+     * Processes the data sent in a Multipart/form-data.
+     */
     async processMultipart() {
         if (!this.contentType?.startsWith('multipart/form-data')) {
             throw new Error('Content-Type is not multipart/form-data');
         }
         const form =  formidable(this.optionsFiles)
         const [fields, files] = await form.parse(this.$)
-        this.setFieldsToBodyJson(fields);
+        this.setFieldsToJson(fields);
         this.setObjectFiles(files);
     }
 
 
-    private setFieldsToBodyJson(fields :  formidable.Fields) {
+    /**
+     * Transforms the fields sent in a Multipart/form-data into a JSON.
+     * @param {formidable.Fields} fields 
+     */
+    private setFieldsToJson(fields :  formidable.Fields) {
         let entriesFields = Object.entries(fields);
         
         let multipartFields = entriesFields.map(( [key, value] ) => {
@@ -147,6 +185,10 @@ export class RequestXperi {
         this.fields = newFields;
     }
 
+    /**
+     * Transforms the data from a file into a JSON object.
+     * @param {formidable.Files<string>} files 
+     */
     private setObjectFiles(files : formidable.Files<string>) {
         const arrayFilesByFields = this.getArrayFilesByFields(files);
 
@@ -171,6 +213,11 @@ export class RequestXperi {
         this.files = arrayObjectFiles;
     } 
 
+    /**
+     * Returns an array containing all the data from the files sent in the request.
+     * @param {formidable.Files<string>} files 
+     * @returns {array}
+     */
     private getArrayFilesByFields(files : formidable.Files<string>) {
         if(this.fieldsFiles?.length) {
             return Object.entries(files).filter(([key]) => {
@@ -181,11 +228,19 @@ export class RequestXperi {
         return Object.entries(files);
     }
 
-    getContentType() {
+    /**
+     * Return request contentType 
+     * @returns {string | undefined}
+     */
+    getContentType() : string | undefined {
         return this.$.headers['content-type'];
     }
 
-    setBody() {
+    /**
+     * Modifies the value of the request body, without necessarily being a JSON.
+     * @returns {Promise<unknown>}
+     */
+    setBody() : Promise<unknown> {
         return new Promise((resolve, reject) => {
             let body = '';
             this.$.on('data', chunk => {
@@ -207,10 +262,21 @@ export class RequestXperi {
         });
     }
 
+    /**
+     * Adds an event to the request.
+     * @param {string} event 
+     * @param {CallableFunction} listener 
+     */
     on(event : string, listener : () => void) {
         this.$.on(event, listener);
     }
 
+    /**
+     * A tube used to transfer data from a stream. 
+     * @param {NodeJS.WritableStream} destination Use request.$
+     * @param {object} options 
+     * @returns {NodeJS.WritableStream}
+     */
     pipe(destination: NodeJS.WritableStream, options?: { end?: boolean | undefined } | undefined): NodeJS.WritableStream {
         return this.$.pipe(destination, options);
     }

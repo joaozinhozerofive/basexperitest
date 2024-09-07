@@ -1,6 +1,9 @@
 import { OutgoingHttpHeader, ServerResponse } from "http";
 import { OutgoingHttpHeaders } from "http2";
 
+/**
+ * This class is used to manipulate and store the request data.
+ */
 export class ResponseXperi{
     $ : ServerResponse;
 
@@ -8,13 +11,24 @@ export class ResponseXperi{
         this.$ = res;
     }
 
+    /**
+     * Sends the data in the response as JSON.
+     * @param {object | void} data 
+     * @returns {ResponseXperi}
+     */
     json(data : object | void) {
         this.contentType('application/json');
         this.$.end(JSON.stringify(data));
         return this;
     }
-    
-    send(data : string, cb?: () => void) {
+
+    /**
+     * 
+     * @param {string} data 
+     * @param {CallableFunction} cb 
+     * @returns {ResponseXperi}
+     */    
+    send(data : string, cb?: () => void) : ResponseXperi {
         this.$.end(data, cb);
         this.contentType('application/json');
         return this;

@@ -54,8 +54,6 @@ export class XperiRouter{
         this.req?.setUrlParams(urlParams);
     }
 
-     /** Função nova burro */
-    
      private isValidRouteByPrevRouteAndNewRoute(route? : Routes) {
         if(!route) {
             return;
@@ -64,20 +62,15 @@ export class XperiRouter{
         const { path : routePath }  = route;
         const { alternativeRoutes } = route;
 
-        const newAlternativeRoutes = alternativeRoutes && alternativeRoutes.filter(alternativeRoute => {
-            return alternativeRoute?.path;
-        })
+        const newAlternativeRoutes = this.getValidAlternativeRoute(alternativeRoutes as Routes[]);
 
         if(!newAlternativeRoutes?.length ) {
             const pathRegex = new RegExp(`^${routePath}$`);
             return pathRegex.test(this.req?.url as string);
         }
 
-        const alternativeRouteCompatibleWithUrlRoute = newAlternativeRoutes.find(alternativeRoute => {
-            const fullPathRegex = new RegExp(`^${routePath}${alternativeRoute.path}$`);
-            return fullPathRegex.test(this.req?.url as string) && this.req?.method === alternativeRoute?.method
-        })
-
+        const alternativeRouteCompatibleWithUrlRoute = this.getAlternativeRouteCompatibleWithUrl(routePath, newAlternativeRoutes)
+        
         if(alternativeRouteCompatibleWithUrlRoute) {
             this.setRequestParamsRegex(alternativeRouteCompatibleWithUrlRoute)
 
@@ -85,6 +78,19 @@ export class XperiRouter{
         }
 
         return false;
+    }
+
+    private getValidAlternativeRoute(alternativeRoutes : Routes[]) {
+        return alternativeRoutes && alternativeRoutes.filter(alternativeRoute => {
+            return alternativeRoute?.path;
+        })
+    }
+
+    private getAlternativeRouteCompatibleWithUrl(routePath : string, newAlternativeRoutes : Routes[]){
+        return newAlternativeRoutes.find(alternativeRoute => {
+            const fullPathRegex = new RegExp(`^${routePath}${alternativeRoute.path}$`);
+            return fullPathRegex.test(this.req?.url as string) && this.req?.method === alternativeRoute?.method
+        })
     }
 
     private setResponse(res : ResponseProps) {
