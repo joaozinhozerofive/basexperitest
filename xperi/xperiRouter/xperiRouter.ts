@@ -1,6 +1,9 @@
 import { CallbacksProps, NextFunction, RequestProps, ResponseProps, Router, XperiInstance } from "../xperi.js";
 import { buildRoute } from "./build-route.js";
 
+/**
+ * "Interface created to group the types of a created route."
+ */
 interface Routes{
     path :  string,
     originalPath :  string,
@@ -9,6 +12,9 @@ interface Routes{
     callbacks? : CallbacksProps;
 }
 
+/**
+ * This class obtains all the functionalities of the route manager.
+ */
 export class XperiRouter{
     private routes : Routes[] = [];
     private mainRoute : string = '';
@@ -17,6 +23,12 @@ export class XperiRouter{
     private server : XperiInstance | null = null;
     private prevRoute : string = '';
 
+
+    /**
+     * This method will create the route and its callbacks, as well as its external routes, which are also created by this class
+     * @param {string} path 
+     * @param {CallbacksProps} callbacks 
+     */
     use(path: string, ...callbacks : CallbacksProps) {
         const callbacksInstanceofRouter  = callbacks.filter(cb => cb instanceof XperiRouter);
         const alternativeRoutes = callbacksInstanceofRouter.map(cb => cb.routes);
@@ -29,7 +41,13 @@ export class XperiRouter{
         });
     }
 
-    executeRoutes(req : RequestProps, res : ResponseProps, server : XperiInstance, prevRoute? : string){
+    /**
+     * This method is used to execute all the routes; this is where all validations and middleware executions are performed.
+     * @param {RequestProps} req 
+     * @param {ResponseProps} res 
+     * @param {XperiInstance} server 
+     */
+    executeRoutes(req : RequestProps, res : ResponseProps, server : XperiInstance){
         this.setRequest(req);
         this.setResponse(res);
         this.setServer(server);
@@ -46,15 +64,24 @@ export class XperiRouter{
         }
     }
 
+    /**
+     * Adds the parameters sent in the URL as a JSON object.
+     * @param {Routes} routeMatched 
+     */
     private setRequestParamsRegex(routeMatched : Routes) {
-        const routeParametersRegex = /:([A-Za-z\-_]+)/g; 
+        const routeParametersRegex = /:([A-Za-z\-_]+)/g;
         const routeWithParams = routeMatched.originalPath.replaceAll(routeParametersRegex, '(?<$1>[a-zA-Z0-9\\-_]+)');
         const routeRegex = new RegExp(routeWithParams);
         const urlParams  = {...this.req?.url.match(routeRegex)?.groups}
         this.req?.setUrlParams(urlParams);
     }
 
-     private isValidRouteByPrevRouteAndNewRoute(route? : Routes) {
+    /**
+     * 
+     * @param route 
+     * @returns 
+     */
+    private isValidRouteByPrevRouteAndNewRoute(route? : Routes) {
         if(!route) {
             return;
         }
@@ -109,7 +136,7 @@ export class XperiRouter{
         this.mainRoute = route;
     }
 
-    private async implementMiddleware(callbacks: CallbacksProps, route :Routes) {
+    private async implementMiddleware(callbacks: CallbacksProps, route: Routes) {
         let index = 0;
         const next = async () => {
             if(index < callbacks.length) {
@@ -127,7 +154,7 @@ export class XperiRouter{
     private async executeCallback(callbacks : CallbacksProps, index : number, next : NextFunction, route : Routes) {
         try {
             if(callbacks[index] instanceof XperiRouter) {
-                this.executeExternalInstanceRouter(callbacks[index], index, route);
+                this.executeExternalInstanceRouter(route);
                 return;
             }
 
@@ -137,7 +164,7 @@ export class XperiRouter{
         }
     }
 
-    async executeExternalInstanceRouter(xperiRouter : XperiRouter, index : number, route : Routes) {
+    async executeExternalInstanceRouter(route : Routes) {
         try {
             const alternativeRouteMatched = route?.alternativeRoutes?.find(alternativeRoute => {
                 const fullPathRegex = new RegExp(`^${route.path}${alternativeRoute.path}$`);
@@ -153,9 +180,9 @@ export class XperiRouter{
         }
     }
     
-    async executeExternalCallbackInstanceRouter(req : RequestProps, res : ResponseProps, server : XperiInstance, route : string) {
+    async executeExternalCallbackInstanceRouter(req : RequestProps, res : ResponseProps, server : XperiInstance) {
         try {
-            this.executeRoutes(req, res, server, route);
+            this.executeRoutes(req, res, server);
         } catch(error) {
             await server.cbConfigError(error, req, res);
         }
