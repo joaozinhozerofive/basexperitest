@@ -1,5 +1,6 @@
 import { OutgoingHttpHeader, ServerResponse } from "http";
 import { OutgoingHttpHeaders } from "http2";
+import { ResponseProps } from "../xperi.js";
 
 /**
  * This class is used to manipulate and store the request data.
@@ -16,7 +17,7 @@ export class ResponseXperi{
      * @param {object | void} data 
      * @returns {ResponseXperi}
      */
-    json(data : object | void) {
+    json(data : object | void) : ResponseXperi {
         this.contentType('application/json');
         this.$.end(JSON.stringify(data));
         return this;
@@ -34,26 +35,51 @@ export class ResponseXperi{
         return this;
     }
 
+    /**
+     * Method used to send a response.
+     * @param {CallableFunction} cb 
+     */
     end(cb? : () => void) {
         this.$.end(cb);
     }
 
-    status(code : number) {
+    /**
+     * Change the status code
+     * @param {number} code 
+     * @returns {ResponseXperi}
+     */
+    status(code : number) : ResponseXperi {
         this.$.statusCode = code;
         return this;
     }
 
-    setHeader(name : string, value : string) {
+    /**
+     * Modifies the headers sent in the response to the request.
+     * @param {string} name 
+     * @param {string} value 
+     * @returns {ResponseXperi}
+     */
+    setHeader(name : string, value : string) : ResponseXperi {
         this.$.setHeader(name, value);
         return this;
     }
 
-    contentType(type : string) {
+    /**
+     * Modifies the content type sent in the response to the request.
+     * @param type 
+     * @returns {ResponseXperi}
+     */
+    contentType(type : string): ResponseXperi {
         this.setHeader('Content-Type', type);
 
         return this;
     }
 
+    /**
+     * Writes the response status code and sets the headers before the response is actually sent.
+     * @param statusCode 
+     * @param headers 
+     */
     writeHead(statusCode : number, headers?: OutgoingHttpHeaders | OutgoingHttpHeader[]) {
         this.$.writeHead(statusCode, headers);
     }

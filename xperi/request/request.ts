@@ -40,10 +40,10 @@ export interface Headers extends IncomingHttpHeaders{
 }
 
 /**
- * @interface urlParams
+ * @interface params
  */
-export interface urlParams {
-    [key : string] : string | number;
+export interface Params<T> {
+    [key : string] : T;
 }
 
 /**
@@ -64,7 +64,7 @@ export class RequestXperi {
         authorization : " "
     };
     query : {params? : ParsedUrlQuery } = {};
-    params : urlParams = {};
+    params : Params<string | number> = {};
 
     constructor(req: IncomingMessage) {
         this.$ = req;
@@ -99,7 +99,7 @@ export class RequestXperi {
      * Modifies the request params
      * @param {urlParams} params 
      */
-    setUrlParams(params : urlParams) {
+    addParams(params : Params<string | number>) {
         Object.entries(params).forEach(([key, value]) => {
             this.params[key] = Number(value) || String(value);
         })

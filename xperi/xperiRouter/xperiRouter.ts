@@ -1,3 +1,4 @@
+import { Params } from "../request/request.js";
 import { CallbacksProps, NextFunction, RequestProps, ResponseProps, Router, XperiInstance } from "../xperi.js";
 import { buildRoute } from "./build-route.js";
 
@@ -17,11 +18,9 @@ interface Routes{
  */
 export class XperiRouter{
     private routes : Routes[] = [];
-    private mainRoute : string = '';
     private res    : ResponseProps | null = null;
     private req    : RequestProps  | null = null;
     private server : XperiInstance | null = null;
-    private prevRoute : string = '';
 
 
     /**
@@ -56,7 +55,6 @@ export class XperiRouter{
 
         if(routeMatched && routeMatched.callbacks) {
             this.setRequestParamsRegex(routeMatched as Routes);
-            this.setMainRoute(routeMatched.path as string);
             this.implementMiddleware(routeMatched.callbacks, routeMatched);
         } else {
             res.status(404);
@@ -68,16 +66,16 @@ export class XperiRouter{
      * Adds the parameters sent in the URL as a JSON object.
      * @param {Routes} routeMatched 
      */
-    private setRequestParamsRegex(routeMatched : Routes) {
+    private setRequestParamsRegex(routeMatched: Routes, prevRoute?: string) {
         const routeParametersRegex = /:([A-Za-z\-_]+)/g;
         const routeWithParams = routeMatched.originalPath.replaceAll(routeParametersRegex, '(?<$1>[a-zA-Z0-9\\-_]+)');
-        const routeRegex = new RegExp(routeWithParams);
+        const routeRegex = prevRoute ? new RegExp(`${prevRoute}${routeWithParams}`) : new RegExp(routeWithParams);
         const urlParams  = {...this.req?.url.match(routeRegex)?.groups}
-        this.req?.setUrlParams(urlParams);
+        this.req?.addParams(urlParams);
     }
 
     /**
-     * 
+     * Validate if the main route and the alternative route (created by any get, post, delete, patch, or put method) are valid routes when compared to the request URL.
      * @param route 
      * @returns 
      */
@@ -97,9 +95,9 @@ export class XperiRouter{
         }
 
         const alternativeRouteCompatibleWithUrlRoute = this.getAlternativeRouteCompatibleWithUrl(routePath, newAlternativeRoutes)
-        
+
         if(alternativeRouteCompatibleWithUrlRoute) {
-            this.setRequestParamsRegex(alternativeRouteCompatibleWithUrlRoute)
+            this.setRequestParamsRegex(alternativeRouteCompatibleWithUrlRoute, routePath)
 
             return true;
         }
@@ -107,42 +105,71 @@ export class XperiRouter{
         return false;
     }
 
-    private getValidAlternativeRoute(alternativeRoutes : Routes[]) {
+    /**
+     * Return only the valid alternative routes (those with a set path).
+     * @param {Routes[]} alternativeRoutes 
+     * @returns {Routes[]}
+     */
+    private getValidAlternativeRoute(alternativeRoutes : Routes[]) : Routes[] {
         return alternativeRoutes && alternativeRoutes.filter(alternativeRoute => {
             return alternativeRoute?.path;
         })
     }
 
-    private getAlternativeRouteCompatibleWithUrl(routePath : string, newAlternativeRoutes : Routes[]){
+    /**
+     * Return an alternative route that matches the URL.
+     * @param {string} routePath 
+     * @param {Routes[]} newAlternativeRoutes 
+     * @returns {Routes | undefined}
+     */
+    private getAlternativeRouteCompatibleWithUrl(routePath : string, newAlternativeRoutes : Routes[]) : Routes | undefined{
         return newAlternativeRoutes.find(alternativeRoute => {
             const fullPathRegex = new RegExp(`^${routePath}${alternativeRoute.path}$`);
             return fullPathRegex.test(this.req?.url as string) && this.req?.method === alternativeRoute?.method
         })
     }
 
+    /**
+     * Set the response object.
+     * @param {ResponseProps} res 
+     */
     private setResponse(res : ResponseProps) {
         this.res = res;
     }
 
+    /**
+     * Set the request object.
+     * @param {RequestProps} req 
+     */
     private setRequest(req : RequestProps) {
         this.req = req;
     }
 
+    /**
+     * Set the instance of server.
+     * @param {XperiInstance} server 
+     */
     private setServer(server : XperiInstance) {
         this.server = server;
     }
 
-    private setMainRoute(route : string) {
-        this.mainRoute = route;
-    }
-
+    /**
+     * Implement the middlewares by placing them inside a try/catch block.
+     * Whenever execution falls into the catch block, the error callback created during server initialization will be executed, receiving the error as a parameter.
+     * Next will be the function executed to increment the index. Whenever next is called, the index will increase, so the function to be executed will always be the next one.
+     * @param callbacks 
+     * @param route 
+     */
     private async implementMiddleware(callbacks: CallbacksProps, route: Routes) {
         let index = 0;
-        const next = async () => {
+        const next = async (params?: Params<string | number>) => {
             if(index < callbacks.length) {
                 try {
+                    if(params) {
+                        this.req?.addParams(params)
+                    }
                     await this.executeCallback(callbacks, index++, next, route);
-                }catch (error) {
+                } catch (error) {
                     await this.server?.cbConfigError(error, this.req as RequestProps, this.res as ResponseProps)
                 }
            }
@@ -151,7 +178,15 @@ export class XperiRouter{
         next();
     }
 
-    private async executeCallback(callbacks : CallbacksProps, index : number, next : NextFunction, route : Routes) {
+    /**
+     * This method is responsible for executing the callbacks, and if the provided callback is actually a Router object, it will need to be executed differently
+     * @param {CallbacksProps} callbacks 
+     * @param {number} index 
+     * @param {NextFunction} next 
+     * @param {Routes} route 
+     * @returns {Promise<void>}
+     */
+    private async executeCallback(callbacks : CallbacksProps, index : number, next : NextFunction, route : Routes) : Promise<void> {
         try {
             if(callbacks[index] instanceof XperiRouter) {
                 this.executeExternalInstanceRouter(route);
@@ -164,6 +199,10 @@ export class XperiRouter{
         }
     }
 
+    /**
+     * It will execute the route that does not belong to this instance but is in the middleware execution queue. External routes will also be referred to as alternative routes.
+     * @param {Routes} route 
+     */
     async executeExternalInstanceRouter(route : Routes) {
         try {
             const alternativeRouteMatched = route?.alternativeRoutes?.find(alternativeRoute => {
@@ -180,14 +219,11 @@ export class XperiRouter{
         }
     }
     
-    async executeExternalCallbackInstanceRouter(req : RequestProps, res : ResponseProps, server : XperiInstance) {
-        try {
-            this.executeRoutes(req, res, server);
-        } catch(error) {
-            await server.cbConfigError(error, req, res);
-        }
-    }
-
+    /**
+     * All callbacks set here will only be executed if the URL and the request method match this method and this path
+     * @param {string} path 
+     * @param {CallbacksProps} callbacks 
+     */
     get(path: string, ...callbacks : CallbacksProps) {
         this.routes.push({ 
             path : buildRoute(path),
@@ -197,6 +233,11 @@ export class XperiRouter{
         });
     }
 
+    /**
+     * All callbacks set here will only be executed if the URL and the request method match this method and this path
+     * @param {string} path 
+     * @param {CallbacksProps} callbacks 
+     */
     post(path: string, ...callbacks : CallbacksProps) {
         this.routes.push({ 
             path : buildRoute(path),
@@ -205,6 +246,11 @@ export class XperiRouter{
             method: 'POST' });
     }
 
+    /**
+     * All callbacks set here will only be executed if the URL and the request method match this method and this path
+     * @param {string} path 
+     * @param {CallbacksProps} callbacks 
+     */
     patch(path: string, ...callbacks : CallbacksProps) {
         this.routes.push({ 
             path : buildRoute(path), 
@@ -213,6 +259,11 @@ export class XperiRouter{
             method: 'PATCH' });
     }
 
+    /**
+     * All callbacks set here will only be executed if the URL and the request method match this method and this path
+     * @param {string} path 
+     * @param {CallbacksProps} callbacks 
+     */
     put(path: string, ...callbacks : CallbacksProps) {
         this.routes.push({ 
             path : buildRoute(path),
@@ -221,12 +272,31 @@ export class XperiRouter{
             method: 'PUT' });
     }
 
+    /**
+     * All callbacks set here will only be executed if the URL and the request method match this method and this path
+     * @param {string} path 
+     * @param {CallbacksProps} callbacks 
+     */
     delete(path: string, ...callbacks : CallbacksProps) {
         this.routes.push({ 
             path : buildRoute(path),
             originalPath : path, 
             callbacks, 
             method: 'DELETE' 
+        });
+    }
+
+    /**
+     * All callbacks set here will only be executed if the URL and the request method match this method and this path
+     * @param {string} path 
+     * @param {CallbacksProps} callbacks 
+     */
+    options(path: string, ...callbacks : CallbacksProps) {
+        this.routes.push({ 
+            path : buildRoute(path),
+            originalPath : path, 
+            callbacks, 
+            method: 'OPTIONS' 
         });
     }
 }

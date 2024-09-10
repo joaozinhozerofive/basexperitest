@@ -1,14 +1,14 @@
 import http, { IncomingMessage, ServerResponse, Server, request }  from 'http';
 import { ResponseXperi } from './response/response.js';
-import { OptionsFilesProps, RequestXperi } from './request/request.js';
+import { OptionsFilesProps, Params, RequestXperi } from './request/request.js';
 import { GlobalsFeatures } from './globalsFeatures.js';
 import { ObjectRouter, XperiRouter } from './xperiRouter/xperiRouter.js';
 import url from "url";
-import { Cors } from './cors/xperiCors.js';
 
-
- export namespace xperiFrame {
-
+/**
+ * This namespace will group all the functionalities of this micro-framework.
+ */
+export namespace xperiFrame {
       export class Xperi {
         private server : Server  | null =  null;
         private port : number | null = null;
@@ -19,19 +19,36 @@ import { Cors } from './cors/xperiCors.js';
         fieldsFiles : string[] | undefined = [];
         cbRoutes : CallbacksProps = [];
 
+        /**
+         * Create the global features.
+         */
         constructor() {
             new GlobalsFeatures();
         }
 
+        /**
+         * Specify all the callbacks that should be used.
+         * @param {DeclaresTypes.CallbacksProps} callbacks 
+         */
         use(...callbacks : DeclaresTypes.CallbacksProps) {
             this.callbacks.push(...callbacks);
         }
 
-        configError(cbConfigError : DeclaresTypes.CallbackErrorProps) {
+        /**
+         * It will save the callback to be executed whenever there is an error.
+         * @param {DeclaresTypes.CallbackErrorProps} cbConfigError 
+         */
+        error(cbConfigError : DeclaresTypes.CallbackErrorProps) {
             this.cbConfigError =  cbConfigError;
         }
 
-        listen({port, host = undefined,  callback} : ListenProps) {
+        /**
+         * It is used to specify the server's port, host, and the callback to be executed upon server initialization.
+         * @param {number} port
+         * @param {CallableFunction} callback
+         * @param {string | undefined} [host] - The host on which the server will listen. Optional.
+         */
+        listen(port : number, callback : () => void, host? : string) {
             this.server = http.createServer(async (req : IncomingMessage, res : ServerResponse) => {
                 const response = new ResponseXperi(res);
                 const request  = new RequestXperi(req);
@@ -44,6 +61,13 @@ import { Cors } from './cors/xperiCors.js';
             });
         }
 
+        /**
+         * Implement the middlewares by placing them inside a try/catch block.
+         * Whenever execution falls into the catch block, the error callback created during server initialization will be executed, receiving the error as a parameter.
+         * Next will be the function executed to increment the index. Whenever next is called, the index will increase, so the function to be executed will always be the next one.
+         * @param {RequestProps} req - The request object.
+         * @param {ResponseProps} res - The response object.
+         */
         private async implementMiddleware(req : RequestProps, res : ResponseProps) {
             try {
                 await this.setContentRequest(req);
@@ -52,9 +76,13 @@ import { Cors } from './cors/xperiCors.js';
                 
                 let index = 0;
 
-                const next = async () => {
+                const next = async (params?: Params<string | number>) => {
                    if(index < this.callbacks.length) {
                         try {
+                            if(params?.length) {
+                                req?.addParams(params)
+                            }
+
                             await this.executeCallback(req, res, next, index++);
                         }catch (error) {
                             await this.cbConfigError(error, req, res);
@@ -68,6 +96,13 @@ import { Cors } from './cors/xperiCors.js';
             }
         }
 
+        /**
+         * Executes the callback at the given index and handles routing if the callback is an instance of XperiRouter.
+         * @param {RequestProps} request - The request object.
+         * @param {ResponseProps} response - The response object.
+         * @param {NextFunction} next - The function to call the next middleware.
+         * @param {number} index - The index of the callback to execute.
+         */
         private async executeCallback(request : RequestProps, response : ResponseProps, next : NextFunction, index : number) {
             try {
                 if (this.callbacks[index] instanceof XperiRouter) {
@@ -81,12 +116,23 @@ import { Cors } from './cors/xperiCors.js';
             }
         }
         
+        /**
+         * Executes the routes defined in the XperiRouter instance at the given index.
+         * @param {RequestProps} request - The request object.
+         * @param {ResponseProps} response - The response object.
+         * @param {NextFunction} next - The function to call the next middleware.
+         * @param {number} index - The index of the XperiRouter instance in the callbacks array.
+         */
         private async executeRoutes(request : RequestProps, response : ResponseProps, next : NextFunction, index : number) {
             const fnCallback : ObjectRouter = this.callbacks[index];
 
             fnCallback.executeRoutes(request, response, this); 
         }
 
+        /**
+         * Sets the content of the request based on its content type.
+         * @param {RequestProps} request - The request object.
+         */
         async setContentRequest(request : RequestProps) {
             if(request.contentType == 'application/json') {
                 await request.setBodyJson();
@@ -99,13 +145,23 @@ import { Cors } from './cors/xperiCors.js';
             }
         }
 
+        /**
+         * Configures the upload settings for multipart form-data requests.
+         * @param {RequestProps} request - The request object.
+         */
         private async setConfigUploads(request : RequestProps) {
             request.setFilesFields(this.fieldsFiles);
             request.setOptionsFiles(this.optionsFiles);
             await request.processMultipart();
         }
         
-        uploadedFiles(options: OptionsFiles, ...fields : string[]) {
+        /**
+         * Creates a middleware to handle file uploads.
+         * @param {OptionsFiles} options - The options for file uploads.
+         * @param {...string[]} fields - The fields to process.
+         * @returns {CallableFunction} - The middleware function for handling file uploads.
+         */
+        uploadedFiles(options: OptionsFiles, ...fields : string[]) : CallableFunction {
             const objectMultipart = {
                 fields, 
                 options
@@ -117,28 +173,52 @@ import { Cors } from './cors/xperiCors.js';
             return this.middlewareUploaded.bind(objectMultipart);
         }
 
+        /**
+         * Sets the fields for file uploads.
+         * @param {string[]} [fieldsFiles] - The fields to process.
+         */
         setFilesFields(fieldsFiles? : string[]) {
             this.fieldsFiles = fieldsFiles; 
         }
 
+        /**
+         * Sets the options for file uploads.
+         * @param {OptionsFilesProps} optionsFiles - The options for file uploads.
+         */
         setOptionsFiles(optionsFiles : OptionsFilesProps) {
             this.optionsFiles = optionsFiles;
         }
 
-        async middlewareUploaded(this : ObjectMultipart, req : RequestProps, res : ResponseProps, next : NextFunction) {
+        /**
+         * Middleware function for handling file uploads.
+         * @param {RequestProps} req - The request object.
+         * @param {ResponseProps} _ - The response object.
+         * @param {NextFunction} next - The function to call the next middleware.
+         */
+        async middlewareUploaded(this : ObjectMultipart, req : RequestProps, _ : ResponseProps, next : NextFunction) {
             req.setFilesFields(this.fields);
             req.setOptionsFiles(this.options);
             next();
         }
 
+        /**
+         * Closes the server.
+         */
         close() {
             this.server?.close();
         }
 
+        /**
+         * Specify the routes to be used.
+         * @param {CallbacksProps} cbRoutes - The callbacks for the routes.
+         */
         useRoutes(...cbRoutes : CallbacksProps) {
             this.cbRoutes = cbRoutes;
         }
 
+        /**
+         * Method to read files (currently not implemented).
+         */
         readFile() {
 
         }
@@ -162,13 +242,11 @@ export type CallbacksProps     = DeclaresTypes.CallbacksProps;
 export type CallbackErrorProps = DeclaresTypes.CallbackErrorProps;
 export type OptionsFiles       = OptionsFilesProps;
 export type ObjectMultipart    = DeclaresTypes.ObjectMultipart;
-export type ListenProps        = DeclaresTypes.ListenProps;
 
 export namespace DeclaresTypes {
-    export type NextFunction       = () => void;
+    export type NextFunction       = (params?: Params<string | number>) => void;
     export type ErrorHandler       = Error | undefined;
     export type CallbacksProps     = ((req? : RequestProps, res? : ResponseProps, next? : NextFunction, server?: XperiInstance) => Promise<any>)[] | any[];
     export type CallbackErrorProps = ((error : unknown, req : RequestProps, res : ResponseProps) => Promise<void | object>);
     export type ObjectMultipart    = {fields : string[], options : OptionsFiles};
-    export type ListenProps         = { port : number,  host? : string, callback? : () => void};
 }

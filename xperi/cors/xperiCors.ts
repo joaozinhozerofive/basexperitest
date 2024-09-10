@@ -12,6 +12,7 @@ export interface CorsProps {
     maxAge?: number;
     exposeHeaders?: string[] | string;
 }
+
 export class Cors {
     private origins?: string[];
     private methods?: string[];
