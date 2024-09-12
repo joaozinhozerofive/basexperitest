@@ -1,5 +1,5 @@
 import { NextFunction, RequestProps, ResponseProps } from "../../xperi/xperi";
-import { AppError } from "../server";
+import { AppError } from "../utils/app-error";
 
 var users = [
     {
@@ -42,5 +42,25 @@ export class UsersController {
         }
 
         res.json(users)
+    }
+
+    delete(req : RequestProps,  res : ResponseProps) {
+      const { user_id } = req.params;
+      const userExist = users.some(user => user.id == user_id);
+      if(!userExist) {
+        throw new AppError("Usuário não encontrado.", 404);
+      } 
+
+      users = users.filter(user => user.id != user_id);
+
+      res.json({
+       users
+      })
+    }
+
+    post(req : RequestProps, res : ResponseProps) {
+      res.json({
+        teste : req.files
+      })
     }
 }

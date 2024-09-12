@@ -1,17 +1,9 @@
-import xperi, { NextFunction, OptionsFiles, RequestProps, ResponseProps, Router } from "../xperi/xperi.ts";
-export const app = xperi();
-import {cors} from "../xperi/cors/xperiCors.ts";
-import { routes } from "./routes/index.ts";
+import { RequestProps, ResponseProps } from "../xperi/xperi";
+import { app } from "./app";
+import { routes } from "./routes";
+import { AppError } from "./utils/app-error";
 
-export class AppError{
-    message   : string;
-    statusCode: number;
 
-    constructor(message : string, statusCode : number = 500) {
-        this.message    = message;
-        this.statusCode = statusCode;
-    }
-}
 app.error(async (error : unknown, req : RequestProps, res: ResponseProps) => {
     if(error instanceof AppError) {
         res.status(error.statusCode).json({
@@ -21,11 +13,9 @@ app.error(async (error : unknown, req : RequestProps, res: ResponseProps) => {
 
         return;
     }
-
-    console.log(error);
 })
 
+const port = 9090;
 app.use(routes);
 
-const port = 9090;
 app.listen(port, () => { console.log(`Server is running on port ${port}`)});

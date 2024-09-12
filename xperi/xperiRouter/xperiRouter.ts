@@ -51,7 +51,7 @@ export class XperiRouter{
         this.setResponse(res);
         this.setServer(server);
 
-        const routeMatched = this.routes.find(route => this.isValidRouteByPrevRouteAndNewRoute(route));
+        const routeMatched = this.routes.find(route => this.isValidRoute(route));
 
         if(routeMatched && routeMatched.callbacks) {
             this.setRequestParamsRegex(routeMatched as Routes);
@@ -79,7 +79,7 @@ export class XperiRouter{
      * @param route 
      * @returns 
      */
-    private isValidRouteByPrevRouteAndNewRoute(route? : Routes) {
+    private isValidRoute(route? : Routes) {
         if(!route) {
             return;
         }
@@ -90,8 +90,7 @@ export class XperiRouter{
         const newAlternativeRoutes = this.getValidAlternativeRoute(alternativeRoutes as Routes[]);
 
         if(!newAlternativeRoutes?.length ) {
-            const pathRegex = new RegExp(`^${routePath}$`);
-            return pathRegex.test(this.req?.url as string);
+            return this.isValidPath(routePath, this.req?.url as string);
         }
 
         const alternativeRouteCompatibleWithUrlRoute = this.getAlternativeRouteCompatibleWithUrl(routePath, newAlternativeRoutes)
@@ -124,9 +123,25 @@ export class XperiRouter{
      */
     private getAlternativeRouteCompatibleWithUrl(routePath : string, newAlternativeRoutes : Routes[]) : Routes | undefined{
         return newAlternativeRoutes.find(alternativeRoute => {
-            const fullPathRegex = new RegExp(`^${routePath}${alternativeRoute.path}$`);
-            return fullPathRegex.test(this.req?.url as string) && this.req?.method === alternativeRoute?.method
+            const fullPath = `${routePath}${alternativeRoute.path}`;
+
+            return this.isValidPath(fullPath, this.req?.url as string) && this.req?.method === alternativeRoute?.method
         })
+    }
+
+    /**
+     * Validate the URL path against the defined route path.
+     * * Make the handling of trailing slashes in each path more flexible for validation, without compromising security.
+     * @param {string} fullPath 
+     * @param {string} pathUrl 
+     * @returns {boolean}
+     */
+    private isValidPath(fullPath : string, pathUrl : string) : boolean {
+        const fullPathRegex = new RegExp(`^${fullPath}$`);
+        const fullPathRegexWithSlash = new RegExp(`^${fullPath}/$`);
+        const pathUrlWithSlash = `${pathUrl}/`;
+
+        return (fullPathRegex.test(pathUrlWithSlash) || fullPathRegex.test(pathUrl as string)) || fullPathRegexWithSlash.test(pathUrl as string);
     }
 
     /**
@@ -162,15 +177,17 @@ export class XperiRouter{
      */
     private async implementMiddleware(callbacks: CallbacksProps, route: Routes) {
         let index = 0;
+
         const next = async (params?: Params<string | number>) => {
             if(index < callbacks.length) {
                 try {
                     if(params) {
                         this.req?.addParams(params)
                     }
+
                     await this.executeCallback(callbacks, index++, next, route);
                 } catch (error) {
-                    await this.server?.cbConfigError(error, this.req as RequestProps, this.res as ResponseProps)
+                    this.server?.cbConfigError && await this.server?.cbConfigError(error, this.req as RequestProps, this.res as ResponseProps)
                 }
            }
         };
@@ -192,7 +209,6 @@ export class XperiRouter{
                 this.executeExternalInstanceRouter(route);
                 return;
             }
-
             await callbacks[index](this.req, this.res, next, this.server);
         } catch(error) {
             await this.server?.cbConfigError(error, this.req as RequestProps, this.res as ResponseProps);
@@ -206,8 +222,8 @@ export class XperiRouter{
     async executeExternalInstanceRouter(route : Routes) {
         try {
             const alternativeRouteMatched = route?.alternativeRoutes?.find(alternativeRoute => {
-                const fullPathRegex = new RegExp(`^${route.path}${alternativeRoute.path}$`);
-                return fullPathRegex.test(this.req?.url as string) && this.req?.method === alternativeRoute?.method
+                const fullPath = `${route.path}${alternativeRoute.path}`
+                return this.isValidPath(fullPath, this.req?.url as string) && this.req?.method === alternativeRoute?.method
             })
 
             if(alternativeRouteMatched?.callbacks) {

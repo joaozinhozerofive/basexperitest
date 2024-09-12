@@ -49,15 +49,20 @@ export namespace xperiFrame {
          * @param {string | undefined} [host] - The host on which the server will listen. Optional.
          */
         listen(port : number, callback : () => void, host? : string) {
-            this.server = http.createServer(async (req : IncomingMessage, res : ServerResponse) => {
-                const response = new ResponseXperi(res);
-                const request  = new RequestXperi(req);
-                this.implementMiddleware(request, response);
-            });
+            this.server = this.createServer();
 
             this.port = port;
             this.server.listen(port, host, () => {
                 callback && callback();
+            });
+        }
+
+        private createServer() {
+            return http.createServer(async (req : IncomingMessage, res : ServerResponse) => {
+                const response = new ResponseXperi(res);
+                const request  = new RequestXperi(req);
+                
+                this.implementMiddleware(request, response);
             });
         }
 
@@ -70,7 +75,7 @@ export namespace xperiFrame {
          */
         private async implementMiddleware(req : RequestProps, res : ResponseProps) {
             try {
-                await this.setContentRequest(req);
+                await this.setContentRequest(req, res);
                 const parsedUrl = url.parse(req.url, true)
                 req.setQueryParams(parsedUrl.query);
                 
@@ -85,14 +90,14 @@ export namespace xperiFrame {
 
                             await this.executeCallback(req, res, next, index++);
                         }catch (error) {
-                            await this.cbConfigError(error, req, res);
+                           this.cbConfigError && await this.cbConfigError(error, req, res);
                         }
                    }
                 };
 
                 next();
             } catch(error) {
-                await this.cbConfigError(error, req, res);
+               this.cbConfigError && await this.cbConfigError(error, req, res);
             }
         }
 
@@ -112,7 +117,7 @@ export namespace xperiFrame {
                 }
                 await this.callbacks[index](request, response, next, this);
             } catch (error) {
-                await this.cbConfigError(error, request, response);
+               this.cbConfigError && await this.cbConfigError(error, request, response);
             }
         }
         
@@ -133,12 +138,12 @@ export namespace xperiFrame {
          * Sets the content of the request based on its content type.
          * @param {RequestProps} request - The request object.
          */
-        async setContentRequest(request : RequestProps) {
+        async setContentRequest(request : RequestProps, response : ResponseProps) {
             if(request.contentType == 'application/json') {
                 await request.setBodyJson();
             } 
             else if(request.contentType?.split(';')[0] == 'multipart/form-data') {
-                await this.setConfigUploads(request);
+                await this.setConfigUploads(request, response);
             }     
             else {
                 await request.setBody();
@@ -149,19 +154,25 @@ export namespace xperiFrame {
          * Configures the upload settings for multipart form-data requests.
          * @param {RequestProps} request - The request object.
          */
-        private async setConfigUploads(request : RequestProps) {
+        private async setConfigUploads(request : RequestProps, response : ResponseProps) {
             request.setFilesFields(this.fieldsFiles);
             request.setOptionsFiles(this.optionsFiles);
-            await request.processMultipart();
+
+            try{
+                await request.processMultipart();
+            } catch(error) {
+                this.cbConfigError && await this.cbConfigError(error, request, response)
+            }
         }
         
         /**
          * Creates a middleware to handle file uploads.
+         * * If you want to allow the upload of all files, do not specify any fields.
          * @param {OptionsFiles} options - The options for file uploads.
          * @param {...string[]} fields - The fields to process.
          * @returns {CallableFunction} - The middleware function for handling file uploads.
          */
-        uploadedFiles(options: OptionsFiles, ...fields : string[]) : CallableFunction {
+        upload(options: OptionsFiles, ...fields : string[]) : CallableFunction {
             const objectMultipart = {
                 fields, 
                 options
@@ -169,7 +180,6 @@ export namespace xperiFrame {
 
             this.setFilesFields(fields);
             this.setOptionsFiles(options);
-
             return this.middlewareUploaded.bind(objectMultipart);
         }
 

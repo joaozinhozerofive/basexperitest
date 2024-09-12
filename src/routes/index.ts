@@ -4,7 +4,10 @@ import { usersRoutes } from "./users-routes";
 export const routes = Router();
 
 routes.use('/users', usersRoutes);
-routes.use('/orders', () => {
-    console.log('testando')
+routes.use('/orders', (req, res) => {
+    res?.json({
+        teste : 'caiu aqui'
+    });
 });
+
 routes.use('/terceiroTeste');
