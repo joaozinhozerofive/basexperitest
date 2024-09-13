@@ -62,3 +62,19 @@ Para instalar o Xperi, execute o seguinte comando:
 
 ```sh
 npm install xperi
+ -- adicione as seguintes informações
+
+import xperi from 'xperi';
+
+export const app = xperi();
+
+
+Em outro arquivo importe o app
+
+import { app } from "./app";
+
+const PORT = 5050;
+
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`)
+})
