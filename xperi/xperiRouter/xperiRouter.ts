@@ -137,6 +137,7 @@ export class XperiRouter{
      * @returns {boolean}
      */
     private isValidPath(fullPath : string, pathUrl : string) : boolean {
+        [pathUrl] = pathUrl.split("?"); 
         const fullPathRegex = new RegExp(`^${fullPath}$`);
         const fullPathRegexWithSlash = new RegExp(`^${fullPath}/$`);
         const pathUrlWithSlash = `${pathUrl}/`;
@@ -178,11 +179,11 @@ export class XperiRouter{
     private async implementMiddleware(callbacks: CallbacksProps, route: Routes) {
         let index = 0;
 
-        const next = async (params?: Params<string | number>) => {
+        const next = async <T>(params?: T) => {
             if(index < callbacks.length) {
                 try {
                     if(params) {
-                        this.req?.addParams(params)
+                        this.req?.addParams<T>(params)
                     }
 
                     await this.executeCallback(callbacks, index++, next, route);

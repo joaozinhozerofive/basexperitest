@@ -1,12 +1,12 @@
 import { IncomingHttpHeaders, IncomingMessage } from 'http';
 import { XperiError } from '../xperiError.js';
-import formidable, { errors as formidableErrors, Part } from 'formidable';
+import formidable, { File } from 'formidable';
 import { ParsedUrlQuery } from 'querystring';
-import fs from 'fs';
+import fs, { unlinkSync } from 'fs';
 import IncomingForm from 'formidable/Formidable.js';
 import path from 'path';
-import { XperiInstance } from '../xperi.js';
 import { upload, UploadError } from '../uploadErrors.js';
+import xml2js from "xml2js";
 
 /**
  * Interface created to obtain the default options from formidable.
@@ -63,7 +63,7 @@ export interface Params<T> {
  */
 export class RequestXperi {
     $: IncomingMessage;
-    body: object | string | null | undefined = {};
+    body: {[key : string] : any} = {};
     contentType: string | undefined;
     files: { [key: string]: any } = {};
     fields: { [key: string]: any } = {};
@@ -73,7 +73,7 @@ export class RequestXperi {
     url: string = '';
     headers: Headers = { authorization: " " };
     query: { params?: ParsedUrlQuery } = {};
-    params: Params<string | number> = {};
+    params: Params<any> = {};
 
     /**
      * Constructs a new RequestXperi instance.
@@ -105,16 +105,16 @@ export class RequestXperi {
      * @param object - The query parameters to set.
      */
     setQueryParams(object: ParsedUrlQuery) {
-        this.query.params = { ...object };
+        this.query = { ...object };
     }
 
     /**
      * Modifies the request parameters.
      * @param params - The parameters to add.
      */
-    addParams(params: Params<string | number>) {
+    addParams<T>(params: Params<T>) {
         Object.entries(params).forEach(([key, value]) => {
-            this.params[key] = Number(value) || String(value);
+            this.params[key] = typeof value === 'object' ? value : (Number(value) || String(value));
         });
     }
 
@@ -125,10 +125,7 @@ export class RequestXperi {
     setBodyJson(): Promise<unknown> {
         return new Promise((resolve, reject) => {
             let body = '';
-            this.$.on('data', chunk => {
-                body += chunk.toString();
-            });
-
+            this.$.on('data', chunk => body += chunk.toString());
             this.$.on('end', () => {
                 try {
                     this.body = JSON.parse(body);
@@ -137,10 +134,29 @@ export class RequestXperi {
                     reject(new XperiError('Invalid JSON'));
                 }
             });
+            this.$.on('error', reject);
+        });
+    }
 
-            this.$.on('error', err => {
-                reject(err);
+    /**
+     * Saves the request body data as XML, converting it to JSON.
+     * @returns {Promise<unknown>} A promise that resolves with the converted XML result.
+     */
+    setBodyXML(): Promise<unknown> {
+        return new Promise((resolve, reject) => {
+            let xmlData = '';
+            this.$.on('data', chunk => xmlData += chunk.toString());
+            this.$.on('end', () => {
+                xml2js.parseString(xmlData, (err, result) => {
+                    if (err) {
+                        return reject(new XperiError('Invalid XML'));
+                    }
+                    
+                    this.body = result;
+                    resolve(result);
+                });
             });
+            this.$.on('error', reject);
         });
     }
 
@@ -169,10 +185,9 @@ export class RequestXperi {
             throw new Error('Content-Type is not multipart/form-data');
         }
         const form = formidable(this.optionsFiles);
-
         try {
             await this.formidableParse(form);
-        } catch (error: any) {
+        } catch (error) {
             this.configErrorUpload(error);
         }
     }
@@ -184,9 +199,7 @@ export class RequestXperi {
     private configErrorUpload(error: any) {
         if (error instanceof UploadError) {
             const callback = this.getCallbackUploadErrorByCodeError(error.code);
-
             callback && callback();
-            return;
         }
     }
 
@@ -195,185 +208,93 @@ export class RequestXperi {
      * @param code - The error code.
      * @returns {(() => void) | undefined} The callback function, or undefined if not found.
      */
-    private getCallbackUploadErrorByCodeError(code: upload): ((invalidName? : string, code? : number) => void) | undefined {
+    private getCallbackUploadErrorByCodeError(code: upload): (() => void) | undefined {
         const callbacks: { [key in upload]?: () => void } = {
-            [upload.maxFileSize]    : this.optionsFiles.exceptionMaxFileSizeExceeded,
-            [upload.allowExtensions]: this.optionsFiles.exceptionAllowedExtensions || this.getCallbackErrorDefault.bind(this, 'extension', upload.allowExtensions),
-            [upload.maxFields]      : this.optionsFiles.exceptionMaxFields
+            [upload.maxFileSize]: this.optionsFiles.exceptionMaxFileSizeExceeded,
+            [upload.allowExtensions]: this.optionsFiles.exceptionAllowedExtensions || (() => this.getCallbackErrorDefault('extension', upload.allowExtensions)),
+            [upload.maxFields]: this.optionsFiles.exceptionMaxFields
         };
-
         return callbacks[code];
     }
 
-    private getCallbackErrorDefault(invalidName : string, code : number) {
+    /**
+     * Returns the default callback function for upload errors.
+     * @param invalidName - The name of the error type (e.g., "extension").
+     * @param code - The error code.
+     * @returns {void}
+     */
+    private getCallbackErrorDefault(invalidName: string, code: number) {
         throw new UploadError(`Invalid ${invalidName}`, code);
     }
 
     /**
      * Parses the form data using formidable.
      * @param form - The formidable form instance.
-     * @returns {Promise<null>} A promise that resolves when the parsing is complete.
+     * @returns {Promise<File | null>} A promise that resolves when the parsing is complete.
      */
-    private formidableParse(form: IncomingForm) {
+    private formidableParse(form: IncomingForm): Promise<File | null> {
         return new Promise((resolve, reject) => {
             form.parse(this.$, (err, fields, files) => {
-                fields && this.setFieldsToJson(fields);
-                files && this.setObjectFiles(files);
+                if (err) return reject(err);
+                if (fields) this.setFieldsToJson(fields);
+                if (files) this.setObjectFiles(files);
             });
 
-            form.on('file', (name, file) => {
-                const extension = path.extname(file.filepath).replace('.', '');
-
-                if (this.optionsFiles.allowExtensions && !this.optionsFiles.allowExtensions.includes(extension)) {
-                    fs.unlinkSync(file.filepath);
-                    reject(new UploadError('Invalid file extension.', upload.allowExtensions));
-                }
-
-                if (this.fieldsFiles && !this.fieldsFiles.includes(name)) {
-                    fs.unlinkSync(file.filepath);
-                }
-            });
-
-            form.on('error', (error) => {
-                reject(this.getUploadErrorByCodeErrorFormidable(error.code));
-            });
-
-            form.on('end', () => {
-                resolve(null);
-            });
+            form.on('file', (name, file) => this.handleFile(name, file, reject));
+            form.on('fileBegin', (name, file) => this.handleFileBegin(file, reject));
+            form.on('error', (error) => reject(this.getUploadErrorByCodeErrorFormidable(error.code)));
+            form.on('end', () => resolve(null));
         });
     }
 
     /**
-     * Gets an upload error instance by its code.
-     * @param code - The error code.
-     * @returns {UploadError | undefined} The UploadError instance, or undefined if not found.
+     * Handles the uploaded file based on the field name and file data.
+     * @param name - The field name of the file.
+     * @param file - The uploaded file.
+     * @param reject - Function to reject the promise in case of an error.
      */
-    private getUploadErrorByCodeErrorFormidable(code: number) {
-        const uploadError: { [key: number]: UploadError } = {
-            [1009]: new UploadError('Invalid file size', upload.maxFileSize)
-        };
-
-        return uploadError[code];
+    private handleFile(name: string, file: formidable.File, reject: (err: any) => void) {
+        const extension = path.extname(file.filepath).replace('.', '');
+        if (this.optionsFiles.allowExtensions && !this.optionsFiles.allowExtensions.includes(extension)) {
+            fs.unlinkSync(file.filepath);
+            return reject(new UploadError('Invalid file extension.', upload.allowExtensions));
+        }
+        if (this.fieldsFiles && !this.fieldsFiles.includes(name)) {
+            fs.unlinkSync(file.filepath);
+        }
     }
 
     /**
-     * Transforms the fields sent in a Multipart/form-data into a JSON object.
-     * @param fields - The fields to transform.
+     * Handles the beginning of file upload.
+     * @param file - The uploaded file.
+     * @param reject - Function to reject the promise in case of an error.
+     */
+    private handleFileBegin(file: formidable.File, reject: (err: any) => void) {
+        // Implementation of file begin handling if needed.
+    }
+
+    /**
+     * Converts fields data to JSON.
+     * @param fields - The fields data to convert.
      */
     private setFieldsToJson(fields: formidable.Fields) {
-        let entriesFields = Object.entries(fields);
-
-        let multipartFields = entriesFields.map(([key, value]) => {
-            value = value ?? [];
-            let newValue = value.length === 1 ? value[0] : value;
-            return { [key]: newValue };
-        });
-
-        const newFields: { [key: string]: any } = {};
-
-        for (const element of multipartFields) {
-            for (const [key, value] of Object.entries(element)) {
-                newFields[key] = value;
-            }
-        }
-
-        this.fields = newFields;
+        this.fields = fields;
     }
 
     /**
-     * Transforms the data from files into a JSON object.
-     * @param files - The files to transform.
+     * Converts files data to a structured object.
+     * @param files - The files data to convert.
      */
-    private setObjectFiles(files: formidable.Files<string>) {
-        const arrayFilesByFields = this.getArrayFilesByFields(files);
-
-        const arrayFiles = arrayFilesByFields?.map(([, value]) => {
-            return value ?? [];
-        });
-
-        const persistentFiles = arrayFiles?.map(objectClass => {
-            return objectClass;
-        });
-
-        const arrayObjectFiles = persistentFiles[0]?.map(file => {
-            return {
-                filename: file.originalFilename,
-                newFilename: file.newFilename,
-                path: file.filepath,
-                mimeType: file.mimetype,
-                size: file.size
-            };
-        });
-
-        this.files = arrayObjectFiles;
+    private setObjectFiles(files: formidable.Files) {
+        this.files = files;
     }
 
     /**
-     * Returns an array containing all the data from the files sent in the request.
-     * @param files - The files to filter and process.
-     * @returns {array} An array of file data.
+     * Gets the upload error based on the error code from formidable.
+     * @param code - The error code.
+     * @returns {UploadError} The corresponding upload error.
      */
-    private getArrayFilesByFields(files: formidable.Files<string>) {
-        if (this.fieldsFiles?.length) {
-            return Object.entries(files).filter(([key]) => {
-                return this.fieldsFiles?.includes(key);
-            });
-        }
-
-        return Object.entries(files);
-    }
-
-    /**
-     * Returns the content type of the request.
-     * @returns {string | undefined} The content type of the request.
-     */
-    getContentType(): string | undefined {
-        return this.$.headers['content-type'];
-    }
-
-    /**
-     * Modifies the value of the request body, without necessarily being a JSON.
-     * @returns {Promise<unknown>} A promise that resolves with the request body.
-     */
-    setBody(): Promise<unknown> {
-        return new Promise((resolve, reject) => {
-            let body = '';
-            this.$.on('data', chunk => {
-                body += chunk.toString();
-            });
-
-            this.$.on('end', () => {
-                try {
-                    this.body = body;
-                    resolve(this.body);
-                } catch (error) {
-                    reject(new XperiError('Invalid JSON'));
-                }
-            });
-
-            this.$.on('error', err => {
-                reject(err);
-            });
-        });
-    }
-
-    /**
-     * Adds an event listener to the request.
-     * @param event - The event name.
-     * @param listener - The function to call when the event is emitted.
-     */
-    on(event: string, listener: () => void) {
-        this.$.on(event, listener);
-    }
-
-    /**
-     * Pipes the request data to a writable stream.
-     * @param destination - The writable stream to pipe the data to.
-     * @param options - Options for the pipe operation.
-     * @returns {NodeJS.WritableStream} The destination writable stream.
-     */
-    pipe(destination: NodeJS.WritableStream, options?: { end?: boolean | undefined }): NodeJS.WritableStream {
-        return this.$.pipe(destination, options);
+    private getUploadErrorByCodeErrorFormidable(code: number): UploadError {
+        return new UploadError('Upload error', code);
     }
 }

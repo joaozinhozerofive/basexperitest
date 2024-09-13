@@ -157,7 +157,7 @@ export class Cors {
  * @param options 
  * @returns 
  */
-export const cors = (options: CorsProps) => {
+export const apllyCors = (options: CorsProps) => {
     const corsInstance = new Cors(options);
     return corsInstance.apply.bind(corsInstance);
 };

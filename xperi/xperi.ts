@@ -4,6 +4,7 @@ import { OptionsFilesProps, Params, RequestXperi } from './request/request.js';
 import { GlobalsFeatures } from './globalsFeatures.js';
 import { ObjectRouter, XperiRouter } from './xperiRouter/xperiRouter.js';
 import url from "url";
+import { apllyCors } from './cors/xperiCors.js';
 
 /**
  * This namespace will group all the functionalities of this micro-framework.
@@ -18,6 +19,7 @@ export namespace xperiFrame {
         optionsFiles : OptionsFilesProps = {keepExtensions : true};
         fieldsFiles : string[] | undefined = [];
         cbRoutes : CallbacksProps = [];
+        cors  = apllyCors;
 
         /**
          * Create the global features.
@@ -81,11 +83,11 @@ export namespace xperiFrame {
                 
                 let index = 0;
 
-                const next = async (params?: Params<string | number>) => {
+                const next = async <T>(params?: T) => {
                    if(index < this.callbacks.length) {
                         try {
-                            if(params?.length) {
-                                req?.addParams(params)
+                            if(params) {
+                                req?.addParams<T>(params)
                             }
 
                             await this.executeCallback(req, res, next, index++);
@@ -144,10 +146,10 @@ export namespace xperiFrame {
             } 
             else if(request.contentType?.split(';')[0] == 'multipart/form-data') {
                 await this.setConfigUploads(request, response);
-            }     
-            else {
-                await request.setBody();
             }
+            else if(request.contentType == 'application/xml')  {
+                await request.setBodyXML();
+            }    
         }
 
         /**
@@ -254,7 +256,7 @@ export type OptionsFiles       = OptionsFilesProps;
 export type ObjectMultipart    = DeclaresTypes.ObjectMultipart;
 
 export namespace DeclaresTypes {
-    export type NextFunction       = (params?: Params<string | number>) => void;
+    export type NextFunction       = <T>(params?: T) => void;
     export type ErrorHandler       = Error | undefined;
     export type CallbacksProps     = ((req? : RequestProps, res? : ResponseProps, next? : NextFunction, server?: XperiInstance) => Promise<any>)[] | any[];
     export type CallbackErrorProps = ((error : unknown, req : RequestProps, res : ResponseProps) => Promise<void | object>);
