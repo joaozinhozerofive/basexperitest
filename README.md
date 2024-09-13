@@ -55,7 +55,6 @@ Este framework é leve e flexível, oferecendo suporte para diferentes tipos de 
   ![Formidable](https://raw.githubusercontent.com/node-formidable/formidable/master/logo.png)
 
 - **[xml2js](https://github.com/abbelk/xml2js)**: Para a conversão de XML em JSON.
-  ![xml2js](https://repository-images.githubusercontent.com/850074/6f37a8a8-67fa-11e7-8799-9d2e09867a5b)
 
 ## Instalação
 
