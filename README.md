@@ -56,25 +56,15 @@ Este framework é leve e flexível, oferecendo suporte para diferentes tipos de 
 
 - **[xml2js](https://github.com/abbelk/xml2js)**: Para a conversão de XML em JSON.
 
+## Pré-requisitos
+
+Para usar o Xperi, você precisa ter os seguintes pré-requisitos instalados:
+
+- **Node.js**: Versão 18 ou superior
+
 ## Instalação
 
 Para instalar o Xperi, execute o seguinte comando:
 
 ```sh
 npm install xperi
- -- adicione as seguintes informações
-
-import xperi from 'xperi';
-
-export const app = xperi();
-
-
-Em outro arquivo importe o app
-
-import { app } from "./app";
-
-const PORT = 5050;
-
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`)
-})
